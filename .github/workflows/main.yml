@@ -1,0 +1,436 @@
+name: test
+
+env:
+  TZ: Asia/Shanghai
+  ANDROID_VERSION: 'android13'
+  KERNEL_VERSION: '5.15'
+  CCACHE_KEY: ccache-neov4-5.15
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_type:
+        description: '选择ROOT方案'
+        required: true
+        type: choice
+        default: 'resukisu'
+        options:
+          - 'resukisu'
+          - 'sukisu'
+          - 'ksunext'
+          - 'ksu'
+          - 'kowsu'
+          - 'none'
+      ccache_update:
+        description: '更新ccache缓存'
+        required: true
+        type: boolean
+        default: 'false'
+      kernel_suffix:
+        description: '内核后缀(别加连字符,空为默认)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      ksuver: ${{ steps.ksu_version.outputs.ksuver }}
+      ak3name: ${{ steps.create_zip.outputs.ak3name }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: 清理 Runner 磁盘空间
+        run: |
+         mkdir -p /home/runner/.ccache_5.15
+         touch /home/runner/.ccache_5.15/DO_NOT_DELETE
+         sudo rm -rf /usr/share/dotnet || true
+         sudo rm -rf /usr/local/lib/android || true
+         sudo rm -rf /opt/ghc || true
+         sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+         sudo rm -rf /usr/local/share/powershell || true
+         sudo rm -rf /usr/local/graalvm || true
+         sudo rm -rf /usr/local/.ghcup || true
+         sudo rm -rf /usr/local/lib/node_modules || true
+         
+         # 清理 APT 缓存和日志
+         sudo apt clean
+         sudo apt autoclean
+         sudo rm -rf /var/log/*.log
+         sudo rm -rf /var/cache/apt/archives/*
+         
+         #清理临时文件
+         sudo rm -rf /tmp/*
+         sudo rm -rf /var/tmp/*
+         
+         # 查看清理后的空间
+         if [ -d "/home/runner/.ccache_5.15" ]; then
+         echo "ccache缓存目录存在"
+         fi
+         df -h
+         echo "当前根分区可用空间：$(df -B GB / | grep / | awk '{print $4}')"
+    
+      - name: 安装环境依赖+初始化源码仓库及工具链
+        env:
+          KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
+        run: |
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace 
+          sudo apt-mark hold firefox &&
+          sudo apt-mark hold libc-bin &&
+          sudo apt purge -y man-db &&
+          sudo rm -rf /var/lib/man-db/auto-update &&
+          sudo apt update &&
+          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache
+          sudo apt update -y && sudo apt install -y ccache
+          sudo apt update -y
+          sudo apt install -y \
+          flex bison \
+          dwarves \
+          libssl-dev \
+          libelf-dev \
+          bc \
+          python3 \
+          python-is-python3 \
+          make \
+          cmake \
+          zip \
+          aria2 \
+          gnupg \
+          gawk \
+          rsync \
+          binutils-aarch64-linux-gnu \
+          binutils-arm-linux-gnueabihf \
+          tar gzip xz-utils bzip2 \
+          device-tree-compiler \
+          libc6-dev-i386
+
+          sudo apt update -y && sudo apt install -y --no-install-recommends repo
+          echo "正在克隆源码仓库..."
+
+          repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m oneplus_ace3_b.xml --no-tags --depth=1
+          REPO_LAUNCHER="$PWD/.repo/repo/repo"
+          if [ -x "$REPO_LAUNCHER" ]; then
+            "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle
+          else
+            repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle
+          fi
+          cd kernel_platform
+          rm -rf common
+          COMMON_URL="https://github.com/Corona-oplus-kernel/kernel_common_oplus.git"
+          if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
+            COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/Corona-oplus-kernel/kernel_common_oplus.git"
+          fi
+          git clone --depth=1 "$COMMON_URL" -b android13-5.15-lts common
+          cd ../
+          echo "正在克隆llvm-Clang22工具链..."
+          mkdir -p clang22
+          aria2c -s16 -x16 -k1M https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz -o clang.tar.xz
+          tar -xvaf clang.tar.xz -C ./
+          mv LLVM-22.1.0-Linux-X64 clang22
+          rm -rf clang.tar.xz
+
+          ########
+          #if [ ! -f "clang22/bin/clang" ] || [ ! -f "clang22/bin/ld.lld" ]; then
+          #echo "clang自检失败"
+          #ls -l clang22/
+          #exit 1
+          #fi
+          
+          echo "正在去除 ABI 保护 & 去除 dirty 后缀..."
+          cd kernel_platform
+          rm common/android/abi_gki_protected_exports_* || true
+          for f in common/scripts/setlocalversion; do
+            sed -i 's/ -dirty//g' "$f"
+            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+      - name: 配置ccache目录
+        run: |
+          echo "CCACHE_DIR=$HOME/.ccache_5.15" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=3G" >> $GITHUB_ENV
+          echo "当前磁盘空间："
+          df -h
+          echo "当前构建内核版本：5.15.xx"
+
+      - name: 载入ccache缓存
+        uses: actions/cache@v5
+        id: ccache-restore
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-main
+          restore-keys: |
+            ${{ env.CCACHE_KEY }}-${{ runner.os }}-
+            ${{ env.CCACHE_KEY }}-
+
+      - name: 清除旧 ccache 缓存
+        if: inputs.ccache_update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "正在清除旧 ccache 缓存..."
+          if gh cache delete ${{ env.CCACHE_KEY }}-${{ runner.os }}-main -R ${{ github.repository }}; then
+            echo "成功删除 ccache 缓存！"
+          else
+            echo "旧缓存不存在或已被清理！"
+          fi
+      
+      - name: 初始化并配置ccache
+        run: |
+          # 设置ccache环境变量
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_HARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
+          
+          # 确保ccache目录存在
+          mkdir -p "$CCACHE_DIR"
+          
+          # 每次运行都重新配置缓存大小
+          echo "配置ccache缓存大小为: $CCACHE_MAXSIZE"
+          ccache -M "$CCACHE_MAXSIZE"
+          ccache -o compression=true
+          
+          # 显示初始缓存状态
+          echo "ccache初始状态:"
+          ccache -s
+          
+          # 如果缓存恢复命中，显示详细信息
+          if [ "${{ steps.ccache-restore.outputs.cache-hit }}" == 'true' ]; then
+            echo "ccache缓存命中详情:"
+            ccache -sv
+          fi
+
+      - name: 添加KernelSU
+        id: ksu_version
+        run: |
+          cd kernel_workspace
+          cd kernel_platform/common
+          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
+            echo "正在配置SukiSU Ultra..."
+            curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
+            echo "正在配置ReSukiSU..."
+            curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
+            echo "正在配置KernelSU Next..."
+            curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            echo "正在配置原版 KernelSU (tiann/KernelSU)..."
+            curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
+          elif [[ ${{ github.event.inputs.ksu_type }} == "kowsu" ]]; then
+            echo "正在配置KowSU (KOWX712/KernelSU)..."
+            curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
+          else
+            echo "已选择无ROOT，跳过配置..."
+          fi
+          echo "KSUVER=$(cd kernel_workspace/kernel_platform/common && make kernelversion 2>/dev/null || echo unknown)" >> $GITHUB_ENV
+
+      - name: 应用 KernelSU & SUSFS 补丁
+        run: |
+          cd kernel_workspace
+          cd kernel_platform
+          if [[ ${{ github.event.inputs.ksu_type }} != "none" && ${{ github.event.inputs.ksu_type }} != "kowsu" ]]; then
+            echo "正在添加susfs补丁..."
+            git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu susfs4ksu -b gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
+            cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./common/
+            cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
+            cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+            cd ./common
+            patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
+            cd ..
+          else
+            echo "已选择无ROOT，跳过susfs配置..."
+          fi
+          if [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            if [[ -d "./KernelSU" ]]; then
+              echo "正在为原版 KernelSU (tiann/KernelSU)添加补丁..."
+              cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
+              cd ./KernelSU
+              patch -p1 < 10_enable_susfs_for_ksu.patch || true
+              cd ..
+            else
+              echo "未找到 ./KernelSU 目录，跳过原版KSU补丁"
+            fi
+          fi
+
+
+          
+      - name: 添加SUSFS 配置项
+        run: |
+          cd kernel_workspace
+          cd kernel_platform
+          if [[ "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
+            echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> ./common/arch/arm64/configs/gki_defconfig
+          else
+            echo "已选择无ROOT，跳过SUSFS配置..."
+          fi
+
+      - name: 添加 KSU & 其他配置项
+        run: |
+          cd kernel_workspace
+          cd kernel_platform
+          if [[ "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
+            echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+            if [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+              echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+            fi
+          else
+            echo "已选择无ROOT，跳过KSU/KPM配置..."
+          fi
+          #添加对 Mountify (backslashxx/mountify) 模块的支持
+          echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
+          # 开启O2编译优化配置
+          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          #禁用 defconfig 检查
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+          #禁用 git 本地版本后缀（去掉 -g<hash> 等）
+          echo "CONFIG_LOCALVERSION_AUTO=n" >> ./common/arch/arm64/configs/gki_defconfig
+          #避免生成 git 后缀
+          touch ./common/.scmversion
+          #跳过将uapi标准头安装到 usr/include 目录的不必要操作，节省编译时间
+          echo "CONFIG_HEADERS_INSTALL=n" >> ./common/arch/arm64/configs/gki_defconfig
+
+
+      - name: 添加内核名称
+        run: |
+          cd kernel_workspace
+          cd kernel_platform
+          if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
+            echo "替换内核版本名称..."
+            echo "当前内核版本名称：${{ github.event.inputs.kernel_suffix }}"
+            for f in ./common/scripts/setlocalversion; do
+              sed -i "\$s|echo \"\$res\"|echo \"-${{ github.event.inputs.kernel_suffix }}\"|" "$f"
+            done
+          else
+            echo "未设置内核后缀，跳过内核名称替换"
+          fi
+
+      - name: 构建内核
+        run: |
+          WORKDIR="$(pwd)"
+          export PATH="/usr/lib/ccache:$PATH"
+          export PATH="$WORKDIR/kernel_workspace/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
+          CLANG_DIR="$WORKDIR/kernel_workspace/clang22/LLVM-22.1.0-Linux-X64/bin"
+          CLANG_VERSION="$($CLANG_DIR/clang --version | head -n 1)"
+          LLD_VERSION="$($CLANG_DIR/ld.lld --version | head -n 1)"
+          echo "编译器信息:"
+          echo "Clang版本: $CLANG_VERSION"
+          echo "LLD版本: $LLD_VERSION"
+          
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_HARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="3G"
+          echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
+          export KBUILD_BUILD_USER=XinRan♡
+          export KBUILD_BUILD_HOST=Bai
+          cd kernel_workspace/kernel_platform/common
+          #在构建内核的同时清除不必要的.NET, Android NDK, Haskell, CodeQL运行库，清理空间且不阻塞后续步骤运行
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
+          
+          make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
+          
+          echo "内核编译完成！"
+          echo "ccache状态："
+          ccache -s
+          echo "编译后空间:"
+          df -h
+
+      - name: 保存新的 ccache 缓存
+        if: inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-main
+         
+      - name: 克隆 AnyKernel3 并打包
+        id: create_zip
+        env:
+          AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
+        run: |
+          cd kernel_workspace
+          cd kernel_platform
+          if [ -n "$AK3_TOKEN" ]; then
+            AK3_URL="https://x-access-token:${AK3_TOKEN}@github.com/Corona-oplus-kernel/AnyKernel3"
+          else
+            AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
+          fi
+          if [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+            git clone -b kpm "$AK3_URL" --depth=1
+          else
+            git clone -b main "$AK3_URL" --depth=1
+          fi
+          rm -rf ./AnyKernel3/.git
+          cd AnyKernel3
+          # Image 目录已存在，直接替换
+          cp -f ../common/out/arch/arm64/boot/Image ./Image/Image
+          if [[ ! -f ./Image/Image ]]; then
+            echo "未找到内核镜像文件，构建可能出错"
+            exit 1
+          fi
+          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
+            KSU_TYPENAME="SukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
+            KSU_TYPENAME="ReSukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
+            KSU_TYPENAME="KSUNext"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            KSU_TYPENAME="KSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "kowsu" ]]; then
+            KSU_TYPENAME="KowSU"
+          else
+            KSU_TYPENAME="none"
+          fi
+          AK3_NAME=AK3-${{ env.KERNEL_VERSION }}-${KSU_TYPENAME}@Bai.zip
+          zip -r ../$AK3_NAME ./*
+          echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
+
+      - name: 上传 ZIP 工件
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.create_zip.outputs.ak3name }}
+          path: ${{ github.workspace }}/kernel_workspace/kernel_platform/AK3-*.zip
+          archive: false
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+      
+    steps:
+      - name: 下载 ZIP 工件
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.ak3name }}
+          path: ./release_zips
+          skip-decompress: true

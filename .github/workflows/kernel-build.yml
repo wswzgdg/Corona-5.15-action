@@ -1,0 +1,155 @@
+name: Kernel Build (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      manager:
+        description: 'ROOT manager type'
+        required: true
+        type: string
+      kernel_suffix:
+        description: '内核后缀'
+        required: false
+        type: string
+      sukisu_custom:
+        description: 'SukiSU 自定义版本名'
+        required: false
+        type: string
+      resukisu_custom:
+        description: 'ReSukiSU 自定义版本名'
+        required: false
+        type: string
+      build_enabled:
+        description: '是否执行该 manager'
+        required: false
+        type: boolean
+        default: true
+      allow_fail:
+        description: '单个管理器失败不算错误'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build-kernel:
+    if: ${{ inputs.build_enabled }}
+    continue-on-error: ${{ inputs.allow_fail }}
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: 配置 ccache
+        run: |
+          echo "CCACHE_DIR=$HOME/.ccache_5.15" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
+          mkdir -p $HOME/.ccache_5.15
+
+      - name: 载入 clang22 缓存
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/clang22
+          key: clang22-llvm-22.1.0-${{ runner.os }}
+          restore-keys: |
+            clang22-llvm-22.1.0-${{ runner.os }}
+
+      - name: 载入 repo 缓存
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/.repo
+          key: repo-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+          restore-keys: |
+            repo-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-
+            repo-${{ runner.os }}-
+
+      - name: 载入 ccache 缓存
+        uses: actions/cache@v5
+        id: ccache-restore
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-
+            ccache-5.15-${{ runner.os }}-
+
+      - name: 清理 Runner 磁盘空间
+        run: |
+         mkdir -p /home/runner/.ccache_5.15
+         touch /home/runner/.ccache_5.15/DO_NOT_DELETE
+         sudo rm -rf /usr/share/dotnet || true
+         sudo rm -rf /usr/local/lib/android || true
+         sudo rm -rf /opt/ghc || true
+         sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+         sudo rm -rf /usr/local/share/powershell || true
+         sudo rm -rf /usr/local/graalvm || true
+         sudo rm -rf /usr/local/.ghcup || true
+         sudo rm -rf /usr/local/lib/node_modules || true
+         
+         # 清理 APT 缓存和日志
+         sudo apt clean
+         sudo apt autoclean
+         sudo rm -rf /var/log/*.log
+         sudo rm -rf /var/cache/apt/archives/*
+         
+         #清理临时文件
+         sudo rm -rf /tmp/*
+         sudo rm -rf /var/tmp/*
+         
+         # 查看清理后的空间
+         if [ -d "/home/runner/.ccache_5.15" ]; then
+         echo "ccache缓存目录存在"
+         fi
+         df -h
+         echo "当前根分区可用空间：$(df -B GB / | grep / | awk '{print $4}')"
+
+      - name: 安装环境依赖
+        run: |
+          sudo apt update -y
+          sudo apt install -y             ccache flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3             make cmake zip aria2 gnupg gawk rsync             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf             tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386             repo
+
+      - name: 初始化 ccache
+        run: |
+          ccache -M ${{ env.CCACHE_MAXSIZE }}
+          ccache -o compression=true
+
+      - name: 编译内核
+        env:
+          KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
+          AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
+          ANDROID_VERSION: android13
+          KERNEL_VERSION: '5.15'
+          KERNEL_SUFFIX: ${{ inputs.kernel_suffix }}
+          SKIP_APT: '1'
+        run: |
+          chmod +x .github/workflows/all_managers/common.sh
+          if [ "${{ inputs.manager }}" = "sukisu" ]; then
+            KSU_CUSTOM_NAME="${{ inputs.sukisu_custom }}" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
+          elif [ "${{ inputs.manager }}" = "resukisu" ]; then
+            KSU_CUSTOM_NAME="${{ inputs.resukisu_custom }}" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
+          else
+            KSU_CUSTOM_NAME="" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
+          fi
+
+      - name: 保存 ccache 缓存
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+
+      - name: 保存 repo 缓存
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/.repo
+          key: repo-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+
+      - name: 上传 ZIP 工件
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
+          path: ${{ github.workspace }}/out_zips/AK3-*.zip

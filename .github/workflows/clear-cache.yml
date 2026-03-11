@@ -1,0 +1,58 @@
+name: Clear Actions Cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      prefix:
+        description: 'Cache key prefix to delete (e.g., ccache-5.15, repo-, clang22-)'
+        required: true
+        type: string
+        default: 'ccache-5.15'
+      dry_run:
+        description: 'Only list matching caches, do not delete'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  clear-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches by prefix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: ${{ inputs.prefix }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PREFIX}" ]; then
+            echo "prefix 不能为空"
+            exit 1
+          fi
+          echo "查找缓存前缀: ${PREFIX}"
+          ids=$(gh api --paginate -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/caches \
+            -q '.actions_caches[] | select(.key | startswith(env.PREFIX)) | .id')
+
+          if [ -z "${ids}" ]; then
+            echo "未找到匹配缓存"
+            exit 0
+          fi
+
+          echo "匹配的缓存 ID:"
+          echo "${ids}"
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "dry_run=true，未执行删除"
+            exit 0
+          fi
+
+          for id in ${ids}; do
+            echo "删除缓存 ID: ${id}"
+            gh api --method DELETE -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/actions/caches/${id}
+          done

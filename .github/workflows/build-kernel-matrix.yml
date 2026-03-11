@@ -1,0 +1,83 @@
+name: Build Kernel (All Managers Matrix)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_sukisu:
+        description: "编译 SukiSU"
+        required: true
+        type: boolean
+        default: true
+      build_resukisu:
+        description: "编译 ReSukiSU"
+        required: true
+        type: boolean
+        default: true
+      build_ksunext:
+        description: "编译 KSUNext"
+        required: true
+        type: boolean
+        default: true
+      build_ksu:
+        description: "编译 KSU"
+        required: true
+        type: boolean
+        default: true
+      build_kowsu:
+        description: "编译 KowSU"
+        required: true
+        type: boolean
+        default: true
+      build_none:
+        description: "编译 无管理器"
+        required: true
+        type: boolean
+        default: true
+      kernel_suffix:
+        description: "内核后缀(别加连字符,空为默认)"
+        required: false
+        type: string
+        default: ""
+      sukisu_custom:
+        description: "SukiSU 自定义版本名(可空)"
+        required: false
+        type: string
+        default: ""
+      resukisu_custom:
+        description: "ReSukiSU 自定义版本名(可空)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build:
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
+    uses: ./.github/workflows/kernel-build.yml
+    with:
+      manager: ${{ matrix.manager }}
+      kernel_suffix: ${{ inputs.kernel_suffix }}
+      sukisu_custom: ${{ inputs.sukisu_custom }}
+      resukisu_custom: ${{ inputs.resukisu_custom }}
+      build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
+      allow_fail: true
+    secrets: inherit
+
+  release:
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载全部 ZIP 工件
+        uses: actions/download-artifact@v8
+        with:
+          path: ./release_zips
+
+      - name: 上传合并 ZIP 工件
+        uses: actions/upload-artifact@v7
+        with:
+          name: ak3-zips
+          path: ./release_zips
