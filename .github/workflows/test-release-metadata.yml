@@ -1,0 +1,78 @@
+name: Test Release Metadata
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/build-kernel-matrix.yml"
+      - ".github/workflows/test-release-metadata.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-kernel-matrix.yml"
+      - ".github/workflows/test-release-metadata.yml"
+
+jobs:
+  release-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test release metadata script
+        run: |
+          python3 - <<'PY'
+          import os
+          import subprocess
+          import textwrap
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/build-kernel-matrix.yml").read_text()
+          marker = "python3 - <<'PYBODY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PYBODY", start)
+          script = textwrap.dedent(workflow[start:end])
+
+          namespace = {}
+          exec(script, namespace)
+
+          original_check_output = subprocess.check_output
+          try:
+              recorded = {}
+
+              def fake_success(command, text=True, env=None, stderr=None):
+                  recorded["command"] = command
+                  recorded["env"] = env
+                  return "0123456789abcdef0123456789abcdef01234567\trefs/heads/android13-5.15-lts\n"
+
+              subprocess.check_output = fake_success
+              os.environ["KERNEL_COMMON_TOKEN"] = "secret-token"
+              commit = namespace["ls_remote_commit"](
+                  "https://github.com/Corona-oplus-kernel/kernel_common_oplus.git",
+                  "android13-5.15-lts",
+              )
+              assert commit == "0123456789abcdef0123456789abcdef01234567"
+              assert recorded["command"][2] == "https://secret-token@github.com/Corona-oplus-kernel/kernel_common_oplus.git"
+              assert recorded["env"]["GIT_TERMINAL_PROMPT"] == "0"
+
+              def fake_failure(command, text=True, env=None, stderr=None):
+                  raise subprocess.CalledProcessError(
+                      128,
+                      command,
+                      output="fatal: could not read Username for 'https://github.com': No such device or address",
+                  )
+
+              subprocess.check_output = fake_failure
+              os.environ.pop("KERNEL_COMMON_TOKEN", None)
+              commit = namespace["ls_remote_commit"](
+                  "https://github.com/Corona-oplus-kernel/kernel_common_oplus.git",
+                  "android13-5.15-lts",
+              )
+              assert commit is None
+
+              assert namespace["with_github_token"]("https://github.com/example/repo.git") == "https://github.com/example/repo.git"
+          finally:
+              subprocess.check_output = original_check_output
+              os.environ.pop("KERNEL_COMMON_TOKEN", None)
+          PY
