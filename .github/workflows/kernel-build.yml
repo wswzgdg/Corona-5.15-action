@@ -178,7 +178,6 @@ jobs:
               })
 
           repos: list[dict[str, str]] = []
-          add_repo(repos, 'manifest', 'kernel_manifest', workspace / '.repo' / 'manifests')
           add_repo(repos, 'common', 'kernel_common_oplus', workspace / 'kernel_platform' / 'common')
           add_repo(repos, 'manager', labels.get(manager, manager), workspace / 'kernel_platform' / 'KernelSU')
 
