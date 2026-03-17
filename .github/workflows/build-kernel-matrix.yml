@@ -108,6 +108,7 @@ jobs:
       - name: 生成发布描述
         env:
           PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
+          KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
         run: |
           python3 - <<'PYBODY'
           import base64
@@ -179,14 +180,22 @@ jobs:
                   return f'https://{token}@github.com/Corona-oplus-kernel/kernel_common_oplus.git'
               return remote
 
+          def is_private_release_repo(remote):
+              return remote == 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git'
+
           def ls_remote_commit(remote, branch):
-              command = ['git', 'ls-remote', with_github_token(remote), f'refs/heads/{branch}']
+              tokenized_remote = with_github_token(remote)
+              if is_private_release_repo(remote) and tokenized_remote == remote:
+                  return None
+              command = ['git', 'ls-remote', tokenized_remote, f'refs/heads/{branch}']
               env = os.environ.copy()
               env['GIT_TERMINAL_PROMPT'] = '0'
               try:
                   output = subprocess.check_output(command, text=True, env=env, stderr=subprocess.STDOUT).strip()
               except subprocess.CalledProcessError as exc:
                   message = exc.output.strip() if exc.output else str(exc)
+                  if is_private_release_repo(remote) and ('Repository not found' in message or 'could not read Username' in message):
+                      return None
                   print(f'Warning: failed to query {remote}@{branch}: {message}', file=sys.stderr)
                   return None
               if not output:

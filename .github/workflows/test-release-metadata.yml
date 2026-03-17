@@ -56,7 +56,10 @@ jobs:
               assert recorded["command"][2] == "https://secret-token@github.com/Corona-oplus-kernel/kernel_common_oplus.git"
               assert recorded["env"]["GIT_TERMINAL_PROMPT"] == "0"
 
+              calls = {"count": 0}
+
               def fake_failure(command, text=True, env=None, stderr=None):
+                  calls["count"] += 1
                   raise subprocess.CalledProcessError(
                       128,
                       command,
@@ -70,6 +73,15 @@ jobs:
                   "android13-5.15-lts",
               )
               assert commit is None
+              assert calls["count"] == 0
+
+              os.environ["KERNEL_COMMON_TOKEN"] = "bad-token"
+              commit = namespace["ls_remote_commit"](
+                  "https://github.com/Corona-oplus-kernel/kernel_common_oplus.git",
+                  "android13-5.15-lts",
+              )
+              assert commit is None
+              assert calls["count"] == 1
 
               assert namespace["with_github_token"]("https://github.com/example/repo.git") == "https://github.com/example/repo.git"
           finally:
