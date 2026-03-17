@@ -120,17 +120,10 @@ jobs:
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
           ANDROID_VERSION: android13
           KERNEL_VERSION: '5.15'
-          KERNEL_SUFFIX: ${{ inputs.kernel_suffix }}
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
-          if [ "${{ inputs.manager }}" = "sukisu" ]; then
-            KSU_CUSTOM_NAME="${{ inputs.sukisu_custom }}" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
-          elif [ "${{ inputs.manager }}" = "resukisu" ]; then
-            KSU_CUSTOM_NAME="${{ inputs.resukisu_custom }}" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
-          else
-            KSU_CUSTOM_NAME="" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
-          fi
+          .github/workflows/all_managers/common.sh ${{ inputs.manager }}
 
       - name: 保存 ccache 缓存
         if: always()
