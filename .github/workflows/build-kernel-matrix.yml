@@ -115,6 +115,7 @@ jobs:
           import os
           import re
           import subprocess
+          import sys
           from pathlib import Path
 
           REPOS = {
@@ -170,8 +171,28 @@ jobs:
                   return f'https://github.com/{repo}'
               return url
 
+          def with_github_token(remote):
+              token = os.environ.get('KERNEL_COMMON_TOKEN', '').strip()
+              if not token:
+                  return remote
+              if remote == 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git':
+                  return f'https://{token}@github.com/Corona-oplus-kernel/kernel_common_oplus.git'
+              return remote
+
           def ls_remote_commit(remote, branch):
-              return subprocess.check_output(['git', 'ls-remote', remote, f'refs/heads/{branch}'], text=True).split()[0]
+              command = ['git', 'ls-remote', with_github_token(remote), f'refs/heads/{branch}']
+              env = os.environ.copy()
+              env['GIT_TERMINAL_PROMPT'] = '0'
+              try:
+                  output = subprocess.check_output(command, text=True, env=env, stderr=subprocess.STDOUT).strip()
+              except subprocess.CalledProcessError as exc:
+                  message = exc.output.strip() if exc.output else str(exc)
+                  print(f'Warning: failed to query {remote}@{branch}: {message}', file=sys.stderr)
+                  return None
+              if not output:
+                  print(f'Warning: no refs returned for {remote}@{branch}', file=sys.stderr)
+                  return None
+              return output.split()[0]
 
           def build_current_meta():
               current = {}
