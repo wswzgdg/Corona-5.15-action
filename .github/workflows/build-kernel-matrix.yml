@@ -52,7 +52,7 @@ on:
 jobs:
   build:
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       fail-fast: false
       matrix:
         manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
