@@ -71,7 +71,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: write
     steps:
       - name: 下载全部 ZIP 工件
@@ -81,12 +80,11 @@ jobs:
           pattern: ak3-*
           merge-multiple: true
 
-      - name: 下载源码元数据
-        uses: actions/download-artifact@v8
-        with:
-          path: ./source_meta
-          pattern: source-meta-*
-          merge-multiple: true
+      - name: 生成发布信息
+        id: release_meta
+        run: |
+          echo "tag=all-managers-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "name=All Managers Build #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: 获取上一版发布元数据
         id: previous_release
@@ -107,30 +105,55 @@ jobs:
               throw error;
             }
 
-      - name: 生成发布信息
-        id: release_meta
-        run: |
-          echo "tag=all-managers-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
-          echo "name=All Managers Build #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-
       - name: 生成发布描述
         env:
           PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
         run: |
-          git init release_meta_repo >/dev/null 2>&1
-          cd release_meta_repo
-          git remote add origin https://github.com/Corona-oplus-kernel/kernel_common_oplus.git
-          git fetch --depth=1 origin android13-5.15-lts
-          COMMON_COMMIT=$(git rev-parse FETCH_HEAD)
-          cd ..
-          rm -rf release_meta_repo
-          export COMMON_COMMIT
           python3 - <<'PYBODY'
           import base64
           import json
           import os
           import re
+          import subprocess
           from pathlib import Path
+
+          REPOS = {
+              '_shared': [
+                  ('common', 'kernel_common_oplus', 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts'),
+              ],
+              'resukisu': [
+                  ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'main'),
+                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
+              ],
+              'sukisu': [
+                  ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
+                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
+              ],
+              'ksunext': [
+                  ('manager', 'KSUNext', 'https://github.com/pershoot/KernelSU-Next.git', 'dev-susfs'),
+                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
+              ],
+              'ksu': [
+                  ('manager', 'KernelSU', 'https://github.com/tiann/KernelSU.git', 'main'),
+                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
+              ],
+              'kowsu': [
+                  ('manager', 'KowSU', 'https://github.com/KOWX712/KernelSU.git', 'master'),
+                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
+              ],
+              'none': [
+                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
+              ],
+          }
+
+          TITLES = {
+              'resukisu': 'ReSukiSU',
+              'sukisu': 'SukiSU',
+              'ksunext': 'KSUNext',
+              'ksu': 'KernelSU',
+              'kowsu': 'KowSU',
+              'none': 'No Manager',
+          }
 
           def normalize_github_url(url):
               url = url.strip()
@@ -146,6 +169,25 @@ jobs:
                       repo = repo[:-4]
                   return f'https://github.com/{repo}'
               return url
+
+          def ls_remote_commit(remote, branch):
+              return subprocess.check_output(['git', 'ls-remote', remote, f'refs/heads/{branch}'], text=True).split()[0]
+
+          def build_current_meta():
+              current = {}
+              for manager, repos in REPOS.items():
+                  current[manager] = {
+                      'repos': [
+                          {
+                              'key': key,
+                              'label': label,
+                              'remote': remote,
+                              'commit': ls_remote_commit(remote, branch),
+                          }
+                          for key, label, remote, branch in repos
+                      ]
+                  }
+              return current
 
           def render_repo_line(repo, previous_repo):
               current_commit = repo.get('commit')
@@ -177,36 +219,13 @@ jobs:
               except json.JSONDecodeError:
                   previous_meta = {}
 
-          current_meta = {}
-          for path in sorted(Path('source_meta').glob('*.json')):
-              data = json.loads(path.read_text())
-              current_meta[data['manager']] = data
-
-          shared_meta = {
-              'repos': [{
-                  'key': 'common',
-                  'label': 'kernel_common_oplus',
-                  'remote': 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
-                  'commit': os.environ['COMMON_COMMIT'],
-              }]
-          }
-
-          manager_titles = {
-              'resukisu': 'ReSukiSU',
-              'sukisu': 'SukiSU',
-              'ksunext': 'KSUNext',
-              'ksu': 'KernelSU',
-              'kowsu': 'KowSU',
-              'none': 'No Manager',
-          }
-
+          current_meta = build_current_meta()
           lines = ['## Source Compare', '']
 
-          previous_shared = previous_meta.get('_shared', {})
-          previous_shared_repos = {repo['key']: repo for repo in previous_shared.get('repos', [])}
           shared_lines = []
-          for repo in shared_meta['repos']:
-              rendered = render_repo_line(repo, previous_shared_repos.get(repo['key']))
+          previous_shared = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}
+          for repo in current_meta['_shared']['repos']:
+              rendered = render_repo_line(repo, previous_shared.get(repo['key']))
               if rendered:
                   shared_lines.append(rendered)
           if shared_lines:
@@ -214,51 +233,26 @@ jobs:
               lines.extend(shared_lines)
               lines.append('')
 
-          for manager in sorted(current_meta.keys()):
-              repos = current_meta[manager].get('repos', [])
-              if not repos:
-                  continue
-              prev_repos = {
-                  repo['key']: repo
-                  for repo in previous_meta.get(manager, {}).get('repos', [])
-              }
+          for manager in ['resukisu', 'sukisu', 'ksunext', 'ksu', 'kowsu', 'none']:
+              repos = current_meta[manager]['repos']
+              previous_repos = {repo['key']: repo for repo in previous_meta.get(manager, {}).get('repos', [])}
               manager_lines = []
               for repo in repos:
-                  rendered = render_repo_line(repo, prev_repos.get(repo['key']))
+                  rendered = render_repo_line(repo, previous_repos.get(repo['key']))
                   if rendered:
                       manager_lines.append(rendered)
               if manager_lines:
-                  lines.append(f"### {manager_titles.get(manager, manager)}")
+                  lines.append(f"### {TITLES[manager]}")
                   lines.extend(manager_lines)
                   lines.append('')
 
           if lines == ['## Source Compare', '']:
               lines.extend(['- No source changes since the last release.', ''])
 
-          hidden_meta = {'_shared': shared_meta, **current_meta}
+          hidden_meta = {key: value for key, value in current_meta.items()}
           lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
           Path('release_body.md').write_text('\n'.join(lines) + '\n')
           PYBODY
-
-      - name: 删除中间源码元数据工件
-        if: always()
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-              per_page: 100,
-            });
-
-            for (const artifact of data.artifacts.filter((item) => item.name.startsWith('source-meta-'))) {
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-              });
-            }
 
       - name: 发布 ZIP 包
         uses: softprops/action-gh-release@v2

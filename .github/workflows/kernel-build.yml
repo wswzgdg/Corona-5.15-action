@@ -132,71 +132,6 @@ jobs:
             KSU_CUSTOM_NAME="" .github/workflows/all_managers/common.sh ${{ inputs.manager }}
           fi
 
-      - name: 生成源码元数据
-        if: always()
-        env:
-          MANAGER: ${{ inputs.manager }}
-        run: |
-          mkdir -p source_meta
-          python3 - <<'PYMETA'
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          manager = os.environ['MANAGER']
-          workspace = Path(os.environ['GITHUB_WORKSPACE']) / 'kernel_workspace'
-          output = Path(os.environ['GITHUB_WORKSPACE']) / 'source_meta' / f'{manager}.json'
-
-          labels = {
-              'sukisu': 'SukiSU',
-              'resukisu': 'ReSukiSU',
-              'ksunext': 'KSUNext',
-              'ksu': 'KernelSU',
-              'kowsu': 'KowSU',
-              'none': 'No Manager',
-          }
-
-          def git_output(repo: Path, *args: str) -> str | None:
-              try:
-                  return subprocess.check_output(['git', *args], cwd=repo, text=True).strip()
-              except Exception:
-                  return None
-
-          def add_repo(items: list[dict[str, str]], key: str, label: str, path: Path) -> None:
-              if not path.exists():
-                  return
-              commit = git_output(path, 'rev-parse', 'HEAD')
-              remote = git_output(path, 'remote', 'get-url', 'origin')
-              if not commit or not remote:
-                  return
-              items.append({
-                  'key': key,
-                  'label': label,
-                  'remote': remote,
-                  'commit': commit,
-              })
-
-          repos: list[dict[str, str]] = []
-          add_repo(repos, 'manager', labels.get(manager, manager), workspace / 'kernel_platform' / 'common' / 'KernelSU')
-
-          ak3_meta = Path(os.environ['GITHUB_WORKSPACE']) / 'source_meta' / 'ak3.json'
-          if ak3_meta.exists():
-              try:
-                  ak3 = json.loads(ak3_meta.read_text())
-                  if ak3.get('remote') and ak3.get('commit'):
-                      repos.append({
-                          'key': 'ak3',
-                          'label': 'AnyKernel3',
-                          'remote': ak3['remote'],
-                          'commit': ak3['commit'],
-                      })
-              except json.JSONDecodeError:
-                  pass
-
-          output.write_text(json.dumps({'manager': manager, 'repos': repos}, ensure_ascii=False, indent=2) + '\n')
-          PYMETA
-
       - name: 保存 ccache 缓存
         if: always()
         continue-on-error: true
@@ -219,9 +154,3 @@ jobs:
           name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
 
-      - name: 上传源码元数据
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: source-meta-${{ inputs.manager }}
-          path: ${{ github.workspace }}/source_meta/${{ inputs.manager }}.json
