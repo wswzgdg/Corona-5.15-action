@@ -70,14 +70,146 @@ jobs:
     if: always()
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 下载全部 ZIP 工件
         uses: actions/download-artifact@v8
         with:
           path: ./release_zips
+          pattern: ak3-*
+          merge-multiple: true
 
-      - name: 上传合并 ZIP 工件
-        uses: actions/upload-artifact@v7
+      - name: 下载源码元数据
+        uses: actions/download-artifact@v8
         with:
-          name: ak3-zips
-          path: ./release_zips
+          path: ./source_meta
+          pattern: source-meta-*
+          merge-multiple: true
+
+      - name: 获取上一版发布元数据
+        id: previous_release
+        uses: actions/github-script@v8
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              core.setOutput('body_b64', Buffer.from(data.body || '', 'utf8').toString('base64'));
+            } catch (error) {
+              if (error.status === 404) {
+                core.setOutput('body_b64', '');
+                return;
+              }
+              throw error;
+            }
+
+      - name: 生成发布信息
+        id: release_meta
+        run: |
+          echo "tag=all-managers-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "name=All Managers Build #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: 生成发布描述
+        env:
+          PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
+        run: |
+          python3 - <<'PYBODY'
+          import base64
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          def normalize_github_url(url: str) -> str:
+              url = url.strip()
+              if url.startswith('git@github.com:'):
+                  repo = url.split(':', 1)[1]
+                  if repo.endswith('.git'):
+                      repo = repo[:-4]
+                  return f'https://github.com/{repo}'
+              if 'github.com/' in url:
+                  repo = url.split('github.com/', 1)[1]
+                  repo = repo.split('@', 1)[-1]
+                  if repo.endswith('.git'):
+                      repo = repo[:-4]
+                  return f'https://github.com/{repo}'
+              return url
+
+          previous_body_b64 = os.environ.get('PREVIOUS_RELEASE_BODY_B64', '')
+          previous_body = ''
+          if previous_body_b64:
+              previous_body = base64.b64decode(previous_body_b64).decode('utf-8')
+
+          previous_meta = {}
+          match = re.search(r'<!-- source-meta-begin\n(.*?)\nsource-meta-end -->', previous_body, re.S)
+          if match:
+              try:
+                  previous_meta = json.loads(match.group(1))
+              except json.JSONDecodeError:
+                  previous_meta = {}
+
+          current_meta = {}
+          for path in sorted(Path('source_meta').glob('*.json')):
+              data = json.loads(path.read_text())
+              current_meta[data['manager']] = data
+
+          manager_titles = {
+              'resukisu': 'ReSukiSU',
+              'sukisu': 'SukiSU',
+              'ksunext': 'KSUNext',
+              'ksu': 'KernelSU',
+              'kowsu': 'KowSU',
+              'none': 'No Manager',
+          }
+
+          lines = ['## Source Compare', '']
+          for manager in sorted(current_meta.keys()):
+              repos = current_meta[manager].get('repos', [])
+              if not repos:
+                  continue
+              prev_repos = {
+                  repo['key']: repo
+                  for repo in previous_meta.get(manager, {}).get('repos', [])
+              }
+              manager_lines = []
+              for repo in repos:
+                  label = repo['label']
+                  current_commit = repo['commit']
+                  remote = normalize_github_url(repo['remote'])
+                  prev_commit = prev_repos.get(repo['key'], {}).get('commit')
+                  if prev_commit == current_commit:
+                      continue
+                  if remote.startswith('https://github.com/'):
+                      if prev_commit:
+                          link = f'{remote}/compare/{prev_commit}...{current_commit}'
+                          text = f'{prev_commit[:7]}...{current_commit[:7]}'
+                      else:
+                          link = f'{remote}/commit/{current_commit}'
+                          text = current_commit[:7]
+                      manager_lines.append(f'- {label}: [`{text}`]({link})')
+                  else:
+                      manager_lines.append(f'- {label}: `{current_commit[:7]}`')
+              if manager_lines:
+                  lines.append(f"### {manager_titles.get(manager, manager)}")
+                  lines.extend(manager_lines)
+                  lines.append('')
+
+          if lines == ['## Source Compare', '']:
+              lines.extend(['- No source changes since the last release.', ''])
+
+          hidden_meta = json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))
+          lines.append(f'<!-- source-meta-begin\n{hidden_meta}\nsource-meta-end -->')
+          Path('release_body.md').write_text('\n'.join(lines) + '\n')
+          PYBODY
+
+      - name: 发布 ZIP 包
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          files: ./release_zips/*.zip
+          body_path: ./release_body.md
+          generate_release_notes: false

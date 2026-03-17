@@ -88,7 +88,7 @@ case "$MANAGER" in
  esac
 cd ..
 
-# SUSFS patch (skip kowsu and none)
+# SUSFS patch (skip none)
 if [ "$MANAGER" != "none" ]; then
   rm -rf susfs4ksu
   git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu susfs4ksu -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
@@ -141,6 +141,21 @@ if [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; then
 else
   git clone -b main "$AK3_URL" --depth=1 AnyKernel3
 fi
+mkdir -p "$WORKDIR/source_meta"
+python3 - <<'PYAK3'
+import json
+import subprocess
+from pathlib import Path
+
+repo = Path('AnyKernel3')
+out = Path("$WORKDIR/source_meta/ak3.json")
+try:
+    remote = subprocess.check_output(['git', 'remote', 'get-url', 'origin'], cwd=repo, text=True).strip()
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
+    out.write_text(json.dumps({'remote': remote, 'commit': commit}, ensure_ascii=False) + '\n')
+except Exception:
+    pass
+PYAK3
 rm -rf ./AnyKernel3/.git
 cp -f ./common/out/arch/arm64/boot/Image ./AnyKernel3/Image/Image
 
