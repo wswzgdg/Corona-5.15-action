@@ -178,8 +178,7 @@ jobs:
               })
 
           repos: list[dict[str, str]] = []
-          add_repo(repos, 'common', 'kernel_common_oplus', workspace / 'kernel_platform' / 'common')
-          add_repo(repos, 'manager', labels.get(manager, manager), workspace / 'kernel_platform' / 'KernelSU')
+          add_repo(repos, 'manager', labels.get(manager, manager), workspace / 'kernel_platform' / 'common' / 'KernelSU')
 
           ak3_meta = Path(os.environ['GITHUB_WORKSPACE']) / 'source_meta' / 'ak3.json'
           if ak3_meta.exists():

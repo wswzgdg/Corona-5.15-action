@@ -71,6 +71,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     steps:
       - name: 下载全部 ZIP 工件
@@ -116,6 +117,14 @@ jobs:
         env:
           PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
         run: |
+          git init release_meta_repo >/dev/null 2>&1
+          cd release_meta_repo
+          git remote add origin https://github.com/Corona-oplus-kernel/kernel_common_oplus.git
+          git fetch --depth=1 origin android13-5.15-lts
+          COMMON_COMMIT=$(git rev-parse FETCH_HEAD)
+          cd ..
+          rm -rf release_meta_repo
+          export COMMON_COMMIT
           python3 - <<'PYBODY'
           import base64
           import json
@@ -123,7 +132,7 @@ jobs:
           import re
           from pathlib import Path
 
-          def normalize_github_url(url: str) -> str:
+          def normalize_github_url(url):
               url = url.strip()
               if url.startswith('git@github.com:'):
                   repo = url.split(':', 1)[1]
@@ -137,6 +146,23 @@ jobs:
                       repo = repo[:-4]
                   return f'https://github.com/{repo}'
               return url
+
+          def render_repo_line(repo, previous_repo):
+              current_commit = repo.get('commit')
+              remote = normalize_github_url(repo.get('remote', ''))
+              prev_commit = (previous_repo or {}).get('commit')
+              if not current_commit or prev_commit == current_commit:
+                  return None
+              label = repo.get('label', repo.get('key', 'repo'))
+              if remote.startswith('https://github.com/'):
+                  if prev_commit:
+                      link = f'{remote}/compare/{prev_commit}...{current_commit}'
+                      text = f'{prev_commit[:7]}...{current_commit[:7]}'
+                  else:
+                      link = f'{remote}/commit/{current_commit}'
+                      text = current_commit[:7]
+                  return f'- {label}: [`{text}`]({link})'
+              return f'- {label}: `{current_commit[:7]}`'
 
           previous_body_b64 = os.environ.get('PREVIOUS_RELEASE_BODY_B64', '')
           previous_body = ''
@@ -156,6 +182,15 @@ jobs:
               data = json.loads(path.read_text())
               current_meta[data['manager']] = data
 
+          shared_meta = {
+              'repos': [{
+                  'key': 'common',
+                  'label': 'kernel_common_oplus',
+                  'remote': 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
+                  'commit': os.environ['COMMON_COMMIT'],
+              }]
+          }
+
           manager_titles = {
               'resukisu': 'ReSukiSU',
               'sukisu': 'SukiSU',
@@ -166,6 +201,19 @@ jobs:
           }
 
           lines = ['## Source Compare', '']
+
+          previous_shared = previous_meta.get('_shared', {})
+          previous_shared_repos = {repo['key']: repo for repo in previous_shared.get('repos', [])}
+          shared_lines = []
+          for repo in shared_meta['repos']:
+              rendered = render_repo_line(repo, previous_shared_repos.get(repo['key']))
+              if rendered:
+                  shared_lines.append(rendered)
+          if shared_lines:
+              lines.append('### Common')
+              lines.extend(shared_lines)
+              lines.append('')
+
           for manager in sorted(current_meta.keys()):
               repos = current_meta[manager].get('repos', [])
               if not repos:
@@ -176,22 +224,9 @@ jobs:
               }
               manager_lines = []
               for repo in repos:
-                  label = repo['label']
-                  current_commit = repo['commit']
-                  remote = normalize_github_url(repo['remote'])
-                  prev_commit = prev_repos.get(repo['key'], {}).get('commit')
-                  if prev_commit == current_commit:
-                      continue
-                  if remote.startswith('https://github.com/'):
-                      if prev_commit:
-                          link = f'{remote}/compare/{prev_commit}...{current_commit}'
-                          text = f'{prev_commit[:7]}...{current_commit[:7]}'
-                      else:
-                          link = f'{remote}/commit/{current_commit}'
-                          text = current_commit[:7]
-                      manager_lines.append(f'- {label}: [`{text}`]({link})')
-                  else:
-                      manager_lines.append(f'- {label}: `{current_commit[:7]}`')
+                  rendered = render_repo_line(repo, prev_repos.get(repo['key']))
+                  if rendered:
+                      manager_lines.append(rendered)
               if manager_lines:
                   lines.append(f"### {manager_titles.get(manager, manager)}")
                   lines.extend(manager_lines)
@@ -200,10 +235,30 @@ jobs:
           if lines == ['## Source Compare', '']:
               lines.extend(['- No source changes since the last release.', ''])
 
-          hidden_meta = json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))
-          lines.append(f'<!-- source-meta-begin\n{hidden_meta}\nsource-meta-end -->')
+          hidden_meta = {'_shared': shared_meta, **current_meta}
+          lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
           Path('release_body.md').write_text('\n'.join(lines) + '\n')
           PYBODY
+
+      - name: 删除中间源码元数据工件
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+
+            for (const artifact of data.artifacts.filter((item) => item.name.startsWith('source-meta-'))) {
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+              });
+            }
 
       - name: 发布 ZIP 包
         uses: softprops/action-gh-release@v2
