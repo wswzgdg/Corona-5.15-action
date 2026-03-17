@@ -89,7 +89,7 @@ case "$MANAGER" in
 cd ..
 
 # SUSFS patch (skip kowsu and none)
-if [ "$MANAGER" != "kowsu" ] && [ "$MANAGER" != "none" ]; then
+if [ "$MANAGER" != "none" ]; then
   rm -rf susfs4ksu
   git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu susfs4ksu -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
   cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch ./common/
