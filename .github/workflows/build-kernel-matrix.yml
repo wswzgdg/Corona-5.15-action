@@ -115,18 +115,6 @@ jobs:
           BUILD_KSU: ${{ inputs.build_ksu }}
           BUILD_KOWSU: ${{ inputs.build_kowsu }}
           BUILD_NONE: ${{ inputs.build_none }}
-          BUILD_RESUKISU: ${{ inputs.build_resukisu }}
-          BUILD_SUKISU: ${{ inputs.build_sukisu }}
-          BUILD_KSUNEXT: ${{ inputs.build_ksunext }}
-          BUILD_KSU: ${{ inputs.build_ksu }}
-          BUILD_KOWSU: ${{ inputs.build_kowsu }}
-          BUILD_NONE: ${{ inputs.build_none }}
-          BUILD_RESUKISU: ${{ inputs.build_resukisu }}
-          BUILD_SUKISU: ${{ inputs.build_sukisu }}
-          BUILD_KSUNEXT: ${{ inputs.build_ksunext }}
-          BUILD_KSU: ${{ inputs.build_ksu }}
-          BUILD_KOWSU: ${{ inputs.build_kowsu }}
-          BUILD_NONE: ${{ inputs.build_none }}
         run: |
           python3 - <<'PYBODY'
           import base64
@@ -241,11 +229,12 @@ jobs:
                           return []
                       print(f'Warning: failed to list commits for {remote}@{branch}: {message}', file=sys.stderr)
                       return []
+              separator = chr(1)
               commits = []
               for line in output.splitlines():
-                  if '' not in line:
+                  if separator not in line:
                       continue
-                  commit, subject = line.split('', 1)
+                  commit, subject = line.split(separator, 1)
                   commits.append({'commit': commit, 'subject': subject})
               return commits
 

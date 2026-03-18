@@ -67,8 +67,9 @@ jobs:
                   if command[:2] == ['git', 'fetch']:
                       return ''
                   if command[:2] == ['git', 'log']:
+                      separator = chr(1)
                       return '\n'.join(
-                          f'{index:040x}\x01commit {index}'
+                          f'{index:040x}{separator}commit {index}'
                           for index in range(1, 16)
                       ) + '\n'
                   raise AssertionError(f'unexpected command: {command}')
