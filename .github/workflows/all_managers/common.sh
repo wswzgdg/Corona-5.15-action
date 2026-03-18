@@ -88,33 +88,6 @@ case "$MANAGER" in
  esac
 cd ..
 
-resolve_official_ksu_ci_version() {
-  if [ ! -d "./KernelSU" ]; then
-    return 1
-  fi
-
-  local version=""
-
-  if [ -f "./KernelSU/kernel/Makefile" ]; then
-    version="$(sed -n 's/^KSU_VERSION[[:space:]]*[:?+]*=[[:space:]]*//p' ./KernelSU/kernel/Makefile | head -n 1 | tr -d '[:space:]')"
-  fi
-
-  if [ -z "$version" ] && [ -f "./KernelSU/manager/app/build.gradle.kts" ]; then
-    version="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*//p' ./KernelSU/manager/app/build.gradle.kts | head -n 1 | tr -dc '0-9')"
-  fi
-
-  if [ -z "$version" ] && [ -d "./KernelSU/.git" ]; then
-    version="$(git -C ./KernelSU rev-list --count HEAD 2>/dev/null || true)"
-  fi
-
-  if [ -n "$version" ]; then
-    printf '%s\n' "$version"
-    return 0
-  fi
-
-  return 1
-}
-
 # SUSFS patch (skip none)
 if [ "$MANAGER" != "none" ]; then
   rm -rf susfs4ksu
@@ -175,12 +148,7 @@ case "$MANAGER" in
   sukisu) KSU_TYPENAME="SukiSU";;
   resukisu) KSU_TYPENAME="ReSukiSU";;
   ksunext) KSU_TYPENAME="KSUNext";;
-  ksu)
-    KSU_TYPENAME="KSU"
-    if KSU_CI_VERSION="$(resolve_official_ksu_ci_version)"; then
-      KSU_TYPENAME="KSU-${KSU_CI_VERSION}"
-    fi
-    ;;
+  ksu) KSU_TYPENAME="KSU";;
   kowsu) KSU_TYPENAME="KowSU";;
   none) KSU_TYPENAME="noksu";;
   *) KSU_TYPENAME="$MANAGER";;
