@@ -23,12 +23,14 @@ jobs:
       - name: Test release metadata script
         run: |
           python3 - <<'PY'
+          import base64
+          import json
           import os
           import subprocess
           import textwrap
           from pathlib import Path
 
-          workflow = Path(".github/workflows/build-kernel-matrix.yml").read_text()
+          workflow = Path('.github/workflows/build-kernel-matrix.yml').read_text()
           marker = "python3 - <<'PYBODY'\n"
           start = workflow.index(marker) + len(marker)
           end = workflow.index("\n          PYBODY", start)
@@ -38,53 +40,127 @@ jobs:
           exec(script, namespace)
 
           original_check_output = subprocess.check_output
+          original_env = os.environ.copy()
           try:
-              recorded = {}
+              recorded = []
 
-              def fake_success(command, text=True, env=None, stderr=None):
-                  recorded["command"] = command
-                  recorded["env"] = env
-                  return "0123456789abcdef0123456789abcdef01234567\trefs/heads/android13-5.15-lts\n"
+              commit_map = {
+                  ('https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts'): '0123456789abcdef0123456789abcdef01234567',
+                  ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'): '1111111111111111111111111111111111111111',
+                  ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'): '2222222222222222222222222222222222222222',
+                  ('https://github.com/ReSukiSU/ReSukiSU.git', 'main'): '3333333333333333333333333333333333333333',
+                  ('https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'): '4444444444444444444444444444444444444444',
+              }
 
-              subprocess.check_output = fake_success
-              os.environ["KERNEL_COMMON_TOKEN"] = "secret-token"
-              commit = namespace["ls_remote_commit"](
-                  "https://github.com/Corona-oplus-kernel/kernel_common_oplus.git",
-                  "android13-5.15-lts",
+              def fake_check_output(command, text=True, env=None, stderr=None, cwd=None):
+                  recorded.append({'command': command, 'env': env, 'cwd': cwd})
+                  if command[:2] == ['git', 'ls-remote']:
+                      remote = command[2]
+                      branch = command[3].split('/')[-1]
+                      clean_remote = remote.replace('https://secret-token@github.com/', 'https://github.com/')
+                      commit = commit_map.get((clean_remote, branch))
+                      if not commit:
+                          raise subprocess.CalledProcessError(128, command, output='fatal: missing ref')
+                      return f'{commit}\trefs/heads/{branch}\n'
+                  if command[:2] == ['git', 'init']:
+                      return 'Initialized empty Git repository\n'
+                  if command[:2] == ['git', 'fetch']:
+                      return ''
+                  if command[:2] == ['git', 'log']:
+                      return '\n'.join(
+                          f'{index:040x}\x01commit {index}'
+                          for index in range(1, 16)
+                      ) + '\n'
+                  raise AssertionError(f'unexpected command: {command}')
+
+              subprocess.check_output = fake_check_output
+
+              os.environ['KERNEL_COMMON_TOKEN'] = 'secret-token'
+              commit = namespace['ls_remote_commit'](
+                  'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
+                  'android13-5.15-lts',
               )
-              assert commit == "0123456789abcdef0123456789abcdef01234567"
-              assert recorded["command"][2] == "https://secret-token@github.com/Corona-oplus-kernel/kernel_common_oplus.git"
-              assert recorded["env"]["GIT_TERMINAL_PROMPT"] == "0"
+              assert commit == '0123456789abcdef0123456789abcdef01234567'
+              assert recorded[-1]['command'][2] == 'https://secret-token@github.com/Corona-oplus-kernel/kernel_common_oplus.git'
+              assert recorded[-1]['env']['GIT_TERMINAL_PROMPT'] == '0'
 
-              calls = {"count": 0}
-
-              def fake_failure(command, text=True, env=None, stderr=None):
-                  calls["count"] += 1
-                  raise subprocess.CalledProcessError(
-                      128,
-                      command,
-                      output="fatal: could not read Username for 'https://github.com': No such device or address",
-                  )
-
-              subprocess.check_output = fake_failure
-              os.environ.pop("KERNEL_COMMON_TOKEN", None)
-              commit = namespace["ls_remote_commit"](
-                  "https://github.com/Corona-oplus-kernel/kernel_common_oplus.git",
-                  "android13-5.15-lts",
+              calls_before = len(recorded)
+              os.environ.pop('KERNEL_COMMON_TOKEN', None)
+              commit = namespace['ls_remote_commit'](
+                  'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
+                  'android13-5.15-lts',
               )
               assert commit is None
-              assert calls["count"] == 0
+              assert len(recorded) == calls_before
 
-              os.environ["KERNEL_COMMON_TOKEN"] = "bad-token"
-              commit = namespace["ls_remote_commit"](
-                  "https://github.com/Corona-oplus-kernel/kernel_common_oplus.git",
-                  "android13-5.15-lts",
-              )
-              assert commit is None
-              assert calls["count"] == 1
+              os.environ.update({
+                  'KERNEL_COMMON_TOKEN': 'secret-token',
+                  'BUILD_RESUKISU': 'true',
+                  'BUILD_SUKISU': 'false',
+                  'BUILD_KSUNEXT': 'false',
+                  'BUILD_KSU': 'false',
+                  'BUILD_KOWSU': 'false',
+                  'BUILD_NONE': 'false',
+              })
+              previous_meta = {
+                  '_shared': {
+                      'repos': [{
+                          'key': 'common',
+                          'label': 'kernel_common_oplus',
+                          'remote': 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
+                          'branch': 'android13-5.15-lts',
+                          'commit': '0123456789abcdef0123456789abcdef01234567',
+                      }],
+                  },
+                  '_ak3': {
+                      'repos': [{
+                          'key': 'ak3-kpm',
+                          'label': 'kpm',
+                          'remote': 'https://github.com/Corona-oplus-kernel/AnyKernel3.git',
+                          'branch': 'kpm',
+                          'commit': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                      }],
+                  },
+                  'resukisu': {
+                      'repos': [{
+                          'key': 'manager',
+                          'label': 'ReSukiSU',
+                          'remote': 'https://github.com/ReSukiSU/ReSukiSU.git',
+                          'branch': 'main',
+                          'commit': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                      }],
+                  },
+                  'sukisu': {
+                      'repos': [{
+                          'key': 'manager',
+                          'label': 'SukiSU',
+                          'remote': 'https://github.com/ShirkNeko/SukiSU-Ultra.git',
+                          'branch': 'main',
+                          'commit': 'cccccccccccccccccccccccccccccccccccccccc',
+                      }],
+                  },
+              }
+              previous_body = 'header\n<!-- source-meta-begin\n' + json.dumps(previous_meta, ensure_ascii=False, separators=(',', ':')) + '\nsource-meta-end -->\n'
+              os.environ['PREVIOUS_RELEASE_BODY_B64'] = base64.b64encode(previous_body.encode()).decode()
 
-              assert namespace["with_github_token"]("https://github.com/example/repo.git") == "https://github.com/example/repo.git"
+              output_path = Path('release_body_test.md')
+              namespace['generate_release_body'](output_path)
+              body = output_path.read_text()
+
+              assert '### Common' in body
+              assert body.count('commit ') == 15
+              assert '### AK3' in body
+              assert '- kpm: [`1111111`]' in body
+              assert 'main:' not in body
+              assert '### Managers' in body
+              assert '- ReSukiSU: [`3333333`]' in body
+              assert '- SukiSU:' not in body
+              assert 'secret-token' not in body
+              assert 'source-meta-begin' in body
+              assert '"key":"ak3-kpm"' in body
+              assert '"key":"ak3-main"' not in body
           finally:
               subprocess.check_output = original_check_output
-              os.environ.pop("KERNEL_COMMON_TOKEN", None)
+              os.environ.clear()
+              os.environ.update(original_env)
           PY

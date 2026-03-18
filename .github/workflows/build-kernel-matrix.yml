@@ -109,6 +109,24 @@ jobs:
         env:
           PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
+          BUILD_RESUKISU: ${{ inputs.build_resukisu }}
+          BUILD_SUKISU: ${{ inputs.build_sukisu }}
+          BUILD_KSUNEXT: ${{ inputs.build_ksunext }}
+          BUILD_KSU: ${{ inputs.build_ksu }}
+          BUILD_KOWSU: ${{ inputs.build_kowsu }}
+          BUILD_NONE: ${{ inputs.build_none }}
+          BUILD_RESUKISU: ${{ inputs.build_resukisu }}
+          BUILD_SUKISU: ${{ inputs.build_sukisu }}
+          BUILD_KSUNEXT: ${{ inputs.build_ksunext }}
+          BUILD_KSU: ${{ inputs.build_ksu }}
+          BUILD_KOWSU: ${{ inputs.build_kowsu }}
+          BUILD_NONE: ${{ inputs.build_none }}
+          BUILD_RESUKISU: ${{ inputs.build_resukisu }}
+          BUILD_SUKISU: ${{ inputs.build_sukisu }}
+          BUILD_KSUNEXT: ${{ inputs.build_ksunext }}
+          BUILD_KSU: ${{ inputs.build_ksu }}
+          BUILD_KOWSU: ${{ inputs.build_kowsu }}
+          BUILD_NONE: ${{ inputs.build_none }}
         run: |
           python3 - <<'PYBODY'
           import base64
@@ -117,45 +135,39 @@ jobs:
           import re
           import subprocess
           import sys
+          import tempfile
           from pathlib import Path
 
-          REPOS = {
-              '_shared': [
-                  ('common', 'kernel_common_oplus', 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts'),
-              ],
-              'resukisu': [
-                  ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'main'),
-                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
-              ],
-              'sukisu': [
-                  ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
-                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
-              ],
-              'ksunext': [
-                  ('manager', 'KSUNext', 'https://github.com/pershoot/KernelSU-Next.git', 'dev-susfs'),
-                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
-              ],
-              'ksu': [
-                  ('manager', 'KernelSU', 'https://github.com/tiann/KernelSU.git', 'main'),
-                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
-              ],
-              'kowsu': [
-                  ('manager', 'KowSU', 'https://github.com/KOWX712/KernelSU.git', 'master'),
-                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
-              ],
-              'none': [
-                  ('ak3', 'AnyKernel3', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
-              ],
+          COMMON_REPO = ('common', 'kernel_common_oplus', 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts')
+          AK3_REPOS = {
+              'main': ('ak3-main', 'main', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
+              'kpm': ('ak3-kpm', 'kpm', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
+          }
+          MANAGER_REPOS = {
+              'resukisu': ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'main'),
+              'sukisu': ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
+              'ksunext': ('manager', 'KSUNext', 'https://github.com/pershoot/KernelSU-Next.git', 'dev-susfs'),
+              'ksu': ('manager', 'KernelSU', 'https://github.com/tiann/KernelSU.git', 'main'),
+              'kowsu': ('manager', 'KowSU', 'https://github.com/KOWX712/KernelSU.git', 'master'),
+          }
+          MANAGER_ORDER = ['resukisu', 'sukisu', 'ksunext', 'ksu', 'kowsu', 'none']
+          MANAGER_FLAGS = {
+              'resukisu': 'BUILD_RESUKISU',
+              'sukisu': 'BUILD_SUKISU',
+              'ksunext': 'BUILD_KSUNEXT',
+              'ksu': 'BUILD_KSU',
+              'kowsu': 'BUILD_KOWSU',
+              'none': 'BUILD_NONE',
+          }
+          AK3_BY_MANAGER = {
+              'resukisu': 'kpm',
+              'sukisu': 'kpm',
+              'ksunext': 'main',
+              'ksu': 'main',
+              'kowsu': 'main',
+              'none': 'main',
           }
 
-          TITLES = {
-              'resukisu': 'ReSukiSU',
-              'sukisu': 'SukiSU',
-              'ksunext': 'KSUNext',
-              'ksu': 'KernelSU',
-              'kowsu': 'KowSU',
-              'none': 'No Manager',
-          }
 
           def normalize_github_url(url):
               url = url.strip()
@@ -172,6 +184,7 @@ jobs:
                   return f'https://github.com/{repo}'
               return url
 
+
           def with_github_token(remote):
               token = os.environ.get('KERNEL_COMMON_TOKEN', '').strip()
               if not token:
@@ -180,18 +193,24 @@ jobs:
                   return f'https://{token}@github.com/Corona-oplus-kernel/kernel_common_oplus.git'
               return remote
 
+
           def is_private_release_repo(remote):
               return remote == 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git'
+
+
+          def git_check_output(command, **kwargs):
+              env = kwargs.pop('env', os.environ.copy())
+              env['GIT_TERMINAL_PROMPT'] = '0'
+              return subprocess.check_output(command, text=True, env=env, stderr=subprocess.STDOUT, **kwargs)
+
 
           def ls_remote_commit(remote, branch):
               tokenized_remote = with_github_token(remote)
               if is_private_release_repo(remote) and tokenized_remote == remote:
                   return None
               command = ['git', 'ls-remote', tokenized_remote, f'refs/heads/{branch}']
-              env = os.environ.copy()
-              env['GIT_TERMINAL_PROMPT'] = '0'
               try:
-                  output = subprocess.check_output(command, text=True, env=env, stderr=subprocess.STDOUT).strip()
+                  output = git_check_output(command).strip()
               except subprocess.CalledProcessError as exc:
                   message = exc.output.strip() if exc.output else str(exc)
                   if is_private_release_repo(remote) and ('Repository not found' in message or 'could not read Username' in message):
@@ -203,85 +222,190 @@ jobs:
                   return None
               return output.split()[0]
 
-          def build_current_meta():
-              current = {}
-              for manager, repos in REPOS.items():
-                  current[manager] = {
-                      'repos': [
-                          {
-                              'key': key,
-                              'label': label,
-                              'remote': remote,
-                              'commit': ls_remote_commit(remote, branch),
-                          }
-                          for key, label, remote, branch in repos
-                      ]
-                  }
+
+          def list_recent_commits(remote, branch, limit=15):
+              tokenized_remote = with_github_token(remote)
+              if is_private_release_repo(remote) and tokenized_remote == remote:
+                  return []
+              with tempfile.TemporaryDirectory(prefix='release-meta-') as temp_dir:
+                  try:
+                      git_check_output(['git', 'init'], cwd=temp_dir)
+                      git_check_output(['git', 'fetch', '--depth', str(limit), tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
+                      output = git_check_output(
+                          ['git', 'log', f'--max-count={limit}', '--format=%H%x01%s', 'FETCH_HEAD'],
+                          cwd=temp_dir,
+                      ).strip()
+                  except subprocess.CalledProcessError as exc:
+                      message = exc.output.strip() if exc.output else str(exc)
+                      if is_private_release_repo(remote) and ('Repository not found' in message or 'could not read Username' in message):
+                          return []
+                      print(f'Warning: failed to list commits for {remote}@{branch}: {message}', file=sys.stderr)
+                      return []
+              commits = []
+              for line in output.splitlines():
+                  if '' not in line:
+                      continue
+                  commit, subject = line.split('', 1)
+                  commits.append({'commit': commit, 'subject': subject})
+              return commits
+
+
+          def env_flag(name, default=True):
+              value = os.environ.get(name)
+              if value is None:
+                  return default
+              return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+          def get_selected_managers():
+              return [manager for manager in MANAGER_ORDER if env_flag(MANAGER_FLAGS[manager], True)]
+
+
+          def build_repo_entry(repo_tuple):
+              key, label, remote, branch = repo_tuple
+              return {
+                  'key': key,
+                  'label': label,
+                  'remote': remote,
+                  'branch': branch,
+                  'commit': ls_remote_commit(remote, branch),
+              }
+
+
+          def build_current_meta(selected_managers):
+              current = {
+                  '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
+                  '_ak3': {'repos': []},
+              }
+              required_ak3 = []
+              for branch_name in ['main', 'kpm']:
+                  if any(AK3_BY_MANAGER[manager] == branch_name for manager in selected_managers):
+                      required_ak3.append(branch_name)
+              for branch_name in required_ak3:
+                  current['_ak3']['repos'].append(build_repo_entry(AK3_REPOS[branch_name]))
+              for manager in selected_managers:
+                  if manager in MANAGER_REPOS:
+                      current[manager] = {'repos': [build_repo_entry(MANAGER_REPOS[manager])]}
               return current
 
-          def render_repo_line(repo, previous_repo):
-              current_commit = repo.get('commit')
-              remote = normalize_github_url(repo.get('remote', ''))
-              prev_commit = (previous_repo or {}).get('commit')
-              if not current_commit or prev_commit == current_commit:
+
+          def render_commit_link(remote, current_commit, previous_commit=None, compare_text=False):
+              if not current_commit:
                   return None
-              label = repo.get('label', repo.get('key', 'repo'))
+              remote = normalize_github_url(remote)
               if remote.startswith('https://github.com/'):
-                  if prev_commit:
-                      link = f'{remote}/compare/{prev_commit}...{current_commit}'
-                      text = f'{prev_commit[:7]}...{current_commit[:7]}'
-                  else:
-                      link = f'{remote}/commit/{current_commit}'
-                      text = current_commit[:7]
-                  return f'- {label}: [`{text}`]({link})'
-              return f'- {label}: `{current_commit[:7]}`'
+                  if previous_commit and previous_commit != current_commit:
+                      text = f'{previous_commit[:7]}...{current_commit[:7]}' if compare_text else current_commit[:7]
+                      return f'[`{text}`]({remote}/compare/{previous_commit}...{current_commit})'
+                  return f'[`{current_commit[:7]}`]({remote}/commit/{current_commit})'
+              text = f'{previous_commit[:7]}...{current_commit[:7]}' if previous_commit and previous_commit != current_commit and compare_text else current_commit[:7]
+              return f'`{text}`'
 
-          previous_body_b64 = os.environ.get('PREVIOUS_RELEASE_BODY_B64', '')
-          previous_body = ''
-          if previous_body_b64:
-              previous_body = base64.b64decode(previous_body_b64).decode('utf-8')
 
-          previous_meta = {}
-          match = re.search(r'<!-- source-meta-begin\n(.*?)\nsource-meta-end -->', previous_body, re.S)
-          if match:
+          def render_hash_line(label, repo, previous_repo=None):
+              current_commit = repo.get('commit')
+              if not current_commit:
+                  return None
+              previous_commit = (previous_repo or {}).get('commit')
+              rendered = render_commit_link(repo.get('remote', ''), current_commit, previous_commit, compare_text=False)
+              return f'- {label}: {rendered}'
+
+
+          def render_common_compare_line(repo, previous_repo=None):
+              current_commit = repo.get('commit')
+              previous_commit = (previous_repo or {}).get('commit')
+              if not current_commit or not previous_commit or previous_commit == current_commit:
+                  return None
+              rendered = render_commit_link(repo.get('remote', ''), current_commit, previous_commit, compare_text=True)
+              return f'- {repo.get("label", "common")}: {rendered}'
+
+
+          def render_recent_commit_line(remote, item):
+              commit = item.get('commit')
+              subject = item.get('subject', '').strip() or '(no subject)'
+              if not commit:
+                  return None
+              remote = normalize_github_url(remote)
+              safe_subject = subject.replace('`', "'")
+              if remote.startswith('https://github.com/'):
+                  return f'- [`{commit[:7]}`]({remote}/commit/{commit}) {safe_subject}'
+              return f'- `{commit[:7]}` {safe_subject}'
+
+
+          def load_previous_meta(previous_body):
+              match = re.search(r'<!-- source-meta-begin\n(.*?)\nsource-meta-end -->', previous_body, re.S)
+              if not match:
+                  return {}
               try:
-                  previous_meta = json.loads(match.group(1))
+                  return json.loads(match.group(1))
               except json.JSONDecodeError:
-                  previous_meta = {}
+                  return {}
 
-          current_meta = build_current_meta()
-          lines = ['## Source Compare', '']
 
-          shared_lines = []
-          previous_shared = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}
-          for repo in current_meta['_shared']['repos']:
-              rendered = render_repo_line(repo, previous_shared.get(repo['key']))
-              if rendered:
-                  shared_lines.append(rendered)
-          if shared_lines:
+          def build_release_lines(previous_meta, current_meta):
+              lines = ['## Source Compare', '']
+
+              common_repo = current_meta['_shared']['repos'][0]
+              previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')
               lines.append('### Common')
-              lines.extend(shared_lines)
+              common_line = render_common_compare_line(common_repo, previous_common)
+              if common_line:
+                  lines.append(common_line)
+              else:
+                  recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=15)
+                  if recent_commits:
+                      for item in recent_commits:
+                          rendered = render_recent_commit_line(common_repo['remote'], item)
+                          if rendered:
+                              lines.append(rendered)
+                  else:
+                      rendered = render_hash_line(common_repo['label'], common_repo, previous_common)
+                      if rendered:
+                          lines.append(rendered)
               lines.append('')
 
-          for manager in ['resukisu', 'sukisu', 'ksunext', 'ksu', 'kowsu', 'none']:
-              repos = current_meta[manager]['repos']
-              previous_repos = {repo['key']: repo for repo in previous_meta.get(manager, {}).get('repos', [])}
+              ak3_repos = current_meta.get('_ak3', {}).get('repos', [])
+              if ak3_repos:
+                  previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
+                  lines.append('### AK3')
+                  for repo in ak3_repos:
+                      rendered = render_hash_line(repo['label'], repo, previous_ak3.get(repo['key']))
+                      if rendered:
+                          lines.append(rendered)
+                  lines.append('')
+
               manager_lines = []
-              for repo in repos:
-                  rendered = render_repo_line(repo, previous_repos.get(repo['key']))
+              for manager in MANAGER_ORDER:
+                  if manager not in current_meta or manager.startswith('_'):
+                      continue
+                  repo = current_meta[manager]['repos'][0]
+                  previous_repo = {item['key']: item for item in previous_meta.get(manager, {}).get('repos', [])}.get('manager')
+                  rendered = render_hash_line(repo['label'], repo, previous_repo)
                   if rendered:
                       manager_lines.append(rendered)
               if manager_lines:
-                  lines.append(f"### {TITLES[manager]}")
+                  lines.append('### Managers')
                   lines.extend(manager_lines)
                   lines.append('')
 
-          if lines == ['## Source Compare', '']:
-              lines.extend(['- No source changes since the last release.', ''])
+              hidden_meta = {key: value for key, value in current_meta.items()}
+              lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
+              return lines
 
-          hidden_meta = {key: value for key, value in current_meta.items()}
-          lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
-          Path('release_body.md').write_text('\n'.join(lines) + '\n')
+
+          def generate_release_body(output_path='release_body.md'):
+              previous_body_b64 = os.environ.get('PREVIOUS_RELEASE_BODY_B64', '')
+              previous_body = ''
+              if previous_body_b64:
+                  previous_body = base64.b64decode(previous_body_b64).decode('utf-8')
+              previous_meta = load_previous_meta(previous_body)
+              current_meta = build_current_meta(get_selected_managers())
+              lines = build_release_lines(previous_meta, current_meta)
+              Path(output_path).write_text('\n'.join(lines) + '\n')
+
+
+          if __name__ == '__main__':
+              generate_release_body()
           PYBODY
 
       - name: 发布 ZIP 包
