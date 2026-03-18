@@ -17,7 +17,7 @@ on:
         description: "编译 KSUNext"
         required: true
         type: boolean
-        default: true
+        default: false
       build_ksu:
         description: "编译 KSU"
         required: true
@@ -27,7 +27,7 @@ on:
         description: "编译 KowSU"
         required: true
         type: boolean
-        default: true
+        default: false
       build_none:
         description: "编译 无管理器"
         required: true
