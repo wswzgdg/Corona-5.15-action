@@ -151,7 +151,7 @@ jobs:
               assert '### Common' in body
               assert body.count('commit ') == 15
               assert '### AK3' in body
-              assert '- kpm: [`1111111`]' in body
+              assert '- kpm: [`aaaaaaa...1111111`]' in body
               assert 'main:' not in body
               assert '### Managers' in body
               assert '- ReSukiSU: [`3333333`]' in body

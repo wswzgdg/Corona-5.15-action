@@ -358,9 +358,22 @@ jobs:
                   previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
                   lines.append('### AK3')
                   for repo in ak3_repos:
-                      rendered = render_hash_line(repo['label'], repo, previous_ak3.get(repo['key']))
-                      if rendered:
-                          lines.append(rendered)
+                      prev_repo = previous_ak3.get(repo['key'])
+                      compare_line = render_common_compare_line(repo, prev_repo)
+                      if compare_line:
+                          lines.append(compare_line)
+                      else:
+                          recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
+                          if recent_commits:
+                              lines.append(f"**{repo['label']}**")
+                              for item in recent_commits:
+                                  rendered = render_recent_commit_line(repo['remote'], item)
+                                  if rendered:
+                                      lines.append(rendered)
+                          else:
+                              rendered = render_hash_line(repo['label'], repo, prev_repo)
+                              if rendered:
+                                  lines.append(rendered)
                   lines.append('')
 
               manager_lines = []
