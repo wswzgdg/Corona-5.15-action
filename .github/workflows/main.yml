@@ -336,8 +336,8 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="3G"
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
-          export KBUILD_BUILD_USER=XinRan♡
-          export KBUILD_BUILD_HOST=Bai
+          export KBUILD_BUILD_USER=ZakoBai♡
+          export KBUILD_BUILD_HOST=XinRan
           cd kernel_workspace/kernel_platform/common
           #在构建内核的同时清除不必要的.NET, Android NDK, Haskell, CodeQL运行库，清理空间且不阻塞后续步骤运行
           sudo rm -rf /usr/share/dotnet
