@@ -148,12 +148,12 @@ jobs:
               namespace['generate_release_body'](output_path)
               body = output_path.read_text()
 
-              assert '### Common' in body
+              assert '### 内核' in body
               assert body.count('commit ') == 15
-              assert '### AK3' in body
+              assert '### 刷机包' in body
               assert '- kpm: [`aaaaaaa...1111111`]' in body
               assert 'main:' not in body
-              assert '### Managers' in body
+              assert '### 管理器' in body
               assert '- ReSukiSU: [`3333333`]' in body
               assert '- SukiSU:' not in body
               assert 'secret-token' not in body
