@@ -352,6 +352,8 @@ jobs:
               common_line = render_common_compare_line(common_repo, previous_common)
               if common_line:
                   lines.append(common_line)
+              elif previous_common and previous_common.get('commit') and previous_common.get('commit') == common_repo.get('commit'):
+                  lines.append('- 无修改')
               else:
                   recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=15)
                   if recent_commits:
@@ -374,6 +376,8 @@ jobs:
                       compare_line = render_common_compare_line(repo, prev_repo)
                       if compare_line:
                           lines.append(compare_line)
+                      elif prev_repo and prev_repo.get('commit') and prev_repo.get('commit') == repo.get('commit'):
+                          lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
                       else:
                           recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
                           if recent_commits:
