@@ -1,4 +1,4 @@
-name: Build Kernel (All Managers Matrix)
+name: 全量构建内核
 
 on:
   workflow_dispatch:
@@ -89,7 +89,7 @@ jobs:
         id: release_meta
         run: |
           echo "tag=all-managers-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
-          echo "name=All Managers Build #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "name=全量构建 #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: 获取上一版发布元数据
         id: previous_release
@@ -323,7 +323,7 @@ jobs:
 
           def render_recent_commit_line(remote, item):
               commit = item.get('commit')
-              subject = item.get('subject', '').strip() or '(no subject)'
+              subject = item.get('subject', '').strip() or '(无标题)'
               if not commit:
                   return None
               remote = normalize_github_url(remote)
@@ -344,11 +344,11 @@ jobs:
 
 
           def build_release_lines(previous_meta, current_meta):
-              lines = ['## Source Compare', '']
+              lines = ['## 源码变更', '']
 
               common_repo = current_meta['_shared']['repos'][0]
               previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')
-              lines.append('### Common')
+              lines.append('### 内核')
               common_line = render_common_compare_line(common_repo, previous_common)
               if common_line:
                   lines.append(common_line)
@@ -370,7 +370,7 @@ jobs:
               ak3_repos = current_meta.get('_ak3', {}).get('repos', [])
               if ak3_repos:
                   previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
-                  lines.append('### AK3')
+                  lines.append('### 刷机包')
                   for repo in ak3_repos:
                       prev_repo = previous_ak3.get(repo['key'])
                       compare_line = render_common_compare_line(repo, prev_repo)
@@ -402,7 +402,7 @@ jobs:
                   if rendered:
                       manager_lines.append(rendered)
               if manager_lines:
-                  lines.append('### Managers')
+                  lines.append('### 管理器')
                   lines.extend(manager_lines)
                   lines.append('')
 
@@ -432,7 +432,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}
-          name: ${{ inputs.pre_release && format('Pre-Release | {0}', steps.release_meta.outputs.name) || steps.release_meta.outputs.name }}
+          name: ${{ inputs.pre_release && format('预发布 | {0}', steps.release_meta.outputs.name) || steps.release_meta.outputs.name }}
           files: ./release_zips/*.zip
           body_path: ./release_body.md
           prerelease: ${{ inputs.pre_release }}
