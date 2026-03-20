@@ -334,7 +334,7 @@ jobs:
 
 
           def load_previous_meta(previous_body):
-              match = re.search(r'<!-- source-meta-begin\n(.*?)\nsource-meta-end -->', previous_body, re.S)
+              match = re.search(r'<!-- source-meta-begin\r?\n(.*?)\r?\nsource-meta-end -->', previous_body, re.S)
               if not match:
                   return {}
               try:
