@@ -251,15 +251,14 @@ jobs:
               return commits
 
 
-          def list_commits_range(remote, branch, from_commit, to_commit, max_depth=150):
+          def list_commits_range(remote, branch, from_commit, to_commit):
               tokenized_remote = with_github_token(remote)
               if is_private_release_repo(remote) and tokenized_remote == remote:
                   return None
               with tempfile.TemporaryDirectory(prefix='release-meta-') as temp_dir:
                   try:
                       git_check_output(['git', 'init'], cwd=temp_dir)
-                      git_check_output(['git', 'fetch', '--depth', str(max_depth), tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
-                      git_check_output(['git', 'cat-file', '-t', from_commit], cwd=temp_dir)
+                      git_check_output(['git', 'fetch', '--filter=blob:none', tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
                       output = git_check_output(
                           ['git', 'log', '--format=%H%x01%s', f'{from_commit}..FETCH_HEAD'],
                           cwd=temp_dir,
