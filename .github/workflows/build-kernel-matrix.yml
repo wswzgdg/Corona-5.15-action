@@ -189,13 +189,13 @@ jobs:
               token = os.environ.get('KERNEL_COMMON_TOKEN', '').strip()
               if not token:
                   return remote
-              if remote == 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git':
-                  return f'https://{token}@github.com/Corona-oplus-kernel/kernel_common_oplus.git'
+              if 'github.com/Corona-oplus-kernel/' in remote:
+                  return remote.replace('https://github.com/', f'https://{token}@github.com/')
               return remote
 
 
           def is_private_release_repo(remote):
-              return remote == 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git'
+              return 'github.com/Corona-oplus-kernel/' in remote
 
 
           def git_check_output(command, **kwargs):
