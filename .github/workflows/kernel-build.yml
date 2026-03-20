@@ -59,9 +59,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+          key: repo-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            repo-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-
             repo-${{ runner.os }}-
 
       - name: 载入 ccache 缓存
@@ -69,9 +68,9 @@ jobs:
         id: ccache-restore
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
           restore-keys: |
-            ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-
+            ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-
 
       - name: 清理 Runner 磁盘空间
         run: |
@@ -130,7 +129,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
 
       - name: 保存 repo 缓存
         if: always()
@@ -138,7 +137,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
+          key: repo-${{ runner.os }}-${{ github.sha }}
 
       - name: 上传 ZIP 工件
         uses: actions/upload-artifact@v7
