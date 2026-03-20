@@ -251,6 +251,33 @@ jobs:
               return commits
 
 
+          def list_commits_range(remote, branch, from_commit, to_commit, max_depth=150):
+              tokenized_remote = with_github_token(remote)
+              if is_private_release_repo(remote) and tokenized_remote == remote:
+                  return None
+              with tempfile.TemporaryDirectory(prefix='release-meta-') as temp_dir:
+                  try:
+                      git_check_output(['git', 'init'], cwd=temp_dir)
+                      git_check_output(['git', 'fetch', '--depth', str(max_depth), tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
+                      git_check_output(['git', 'cat-file', '-t', from_commit], cwd=temp_dir)
+                      output = git_check_output(
+                          ['git', 'log', '--format=%H%x01%s', f'{from_commit}..FETCH_HEAD'],
+                          cwd=temp_dir,
+                      ).strip()
+                  except subprocess.CalledProcessError as exc:
+                      message = exc.output.strip() if exc.output else str(exc)
+                      print(f'Warning: failed to list commit range for {remote}@{branch}: {message}', file=sys.stderr)
+                      return None
+              separator = chr(1)
+              commits = []
+              for line in output.splitlines():
+                  if separator not in line:
+                      continue
+                  commit, subject = line.split(separator, 1)
+                  commits.append({'commit': commit, 'subject': subject})
+              return commits
+
+
           def env_flag(name, default=True):
               value = os.environ.get(name)
               if value is None:
@@ -352,6 +379,18 @@ jobs:
               common_line = render_common_compare_line(common_repo, previous_common)
               if common_line:
                   lines.append(common_line)
+                  range_commits = list_commits_range(common_repo['remote'], common_repo['branch'], previous_common['commit'], common_repo['commit'])
+                  if range_commits is not None:
+                      for item in range_commits:
+                          rendered = render_recent_commit_line(common_repo['remote'], item)
+                          if rendered:
+                              lines.append(rendered)
+                  else:
+                      recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=15)
+                      for item in recent_commits:
+                          rendered = render_recent_commit_line(common_repo['remote'], item)
+                          if rendered:
+                              lines.append(rendered)
               elif previous_common and previous_common.get('commit') and previous_common.get('commit') == common_repo.get('commit'):
                   lines.append('- 无修改')
               else:
@@ -376,6 +415,18 @@ jobs:
                       compare_line = render_common_compare_line(repo, prev_repo)
                       if compare_line:
                           lines.append(compare_line)
+                          range_commits = list_commits_range(repo['remote'], repo['branch'], prev_repo['commit'], repo['commit'])
+                          if range_commits is not None:
+                              for item in range_commits:
+                                  rendered = render_recent_commit_line(repo['remote'], item)
+                                  if rendered:
+                                      lines.append(rendered)
+                          else:
+                              recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
+                              for item in recent_commits:
+                                  rendered = render_recent_commit_line(repo['remote'], item)
+                                  if rendered:
+                                      lines.append(rendered)
                       elif prev_repo and prev_repo.get('commit') and prev_repo.get('commit') == repo.get('commit'):
                           lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
                       else:

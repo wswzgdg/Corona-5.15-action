@@ -66,6 +66,8 @@ jobs:
                       return 'Initialized empty Git repository\n'
                   if command[:2] == ['git', 'fetch']:
                       return ''
+                  if command[:3] == ['git', 'cat-file', '-t']:
+                      return 'commit\n'
                   if command[:2] == ['git', 'log']:
                       separator = chr(1)
                       return '\n'.join(
