@@ -4,13 +4,13 @@
 
 ## 支持的 ROOT 管理器
 
-| 管理器 | 来源 | 分支 | SUSFS | KPM |
+| 管理器 | 来源 | 分支 | KPM |
 |--------|------|------|-------|-----|
-| ReSukiSU | [ReSukiSU/ReSukiSU](https://github.com/ReSukiSU/ReSukiSU) | main | 内置 | 支持 |
-| SukiSU Ultra | [ShirkNeko/SukiSU-Ultra](https://github.com/ShirkNeko/SukiSU-Ultra) | builtin | 内置 | 支持 |
-| KSUNext | [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next) | dev-susfs | 内置 | - |
-| KSU | [tiann/KernelSU](https://github.com/tiann/KernelSU) | dev | 外部补丁 | - |
-| KowSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) | master | 内置 | - |
+| ReSukiSU | [ReSukiSU/ReSukiSU](https://github.com/ReSukiSU/ReSukiSU) | main | 支持 |
+| SukiSU Ultra | [ShirkNeko/SukiSU-Ultra](https://github.com/ShirkNeko/SukiSU-Ultra) | builtin | 支持 |
+| KSUNext | [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next) | dev-susfs | - |
+| KSU | [tiann/KernelSU](https://github.com/tiann/KernelSU) | dev | | - |
+| KowSU | [KOWX712/KernelSU](https://github.com/KOWX712/KernelSU) | master | - |
 | none | - | - | - | - |
 
 所有管理器均集成 [SUSFS](https://gitlab.com/simonpunk/susfs4ksu) 内核补丁。
