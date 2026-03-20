@@ -72,7 +72,6 @@ jobs:
           key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ github.run_id }}
           restore-keys: |
             ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-
-            ccache-5.15-${{ runner.os }}-
 
       - name: 清理 Runner 磁盘空间
         run: |
@@ -123,7 +122,7 @@ jobs:
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
-          .github/workflows/all_managers/common.sh ${{ inputs.manager }}
+          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}"
 
       - name: 保存 ccache 缓存
         if: always()

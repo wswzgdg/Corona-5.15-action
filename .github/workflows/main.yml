@@ -229,7 +229,7 @@ jobs:
           else
             echo "已选择无ROOT，跳过配置..."
           fi
-          echo "KSUVER=$(cd kernel_workspace/kernel_platform/common && make kernelversion 2>/dev/null || echo unknown)" >> $GITHUB_ENV
+          echo "KSUVER=$(make kernelversion 2>/dev/null || echo unknown)" >> $GITHUB_ENV
 
       - name: 应用 KernelSU & SUSFS 补丁
         run: |
@@ -297,19 +297,10 @@ jobs:
           else
             echo "已选择无ROOT，跳过KSU/KPM配置..."
           fi
-          #添加对 Mountify (backslashxx/mountify) 模块的支持
-          echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
-          # 开启O2编译优化配置
-          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
           #禁用 defconfig 检查
           sed -i 's/check_defconfig//' ./common/build.config.gki
-          #禁用 git 本地版本后缀（去掉 -g<hash> 等）
-          echo "CONFIG_LOCALVERSION_AUTO=n" >> ./common/arch/arm64/configs/gki_defconfig
           #避免生成 git 后缀
           touch ./common/.scmversion
-          #跳过将uapi标准头安装到 usr/include 目录的不必要操作，节省编译时间
-          echo "CONFIG_HEADERS_INSTALL=n" >> ./common/arch/arm64/configs/gki_defconfig
 
 
       - name: 添加内核名称
@@ -419,18 +410,3 @@ jobs:
           path: ${{ github.workspace }}/kernel_workspace/kernel_platform/AK3-*.zip
           archive: false
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-      actions: read
-      
-    steps:
-      - name: 下载 ZIP 工件
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ needs.build.outputs.ak3name }}
-          path: ./release_zips
-          skip-decompress: true
