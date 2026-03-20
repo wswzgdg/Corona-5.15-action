@@ -48,6 +48,11 @@ on:
         required: false
         type: string
         default: ""
+      pre_release:
+        description: "作为预发布 (不影响正式发布说明)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -92,11 +97,17 @@ jobs:
         with:
           script: |
             try {
-              const { data } = await github.rest.repos.getLatestRelease({
+              const { data: releases } = await github.rest.repos.listReleases({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
+                per_page: 20,
               });
-              core.setOutput('body_b64', Buffer.from(data.body || '', 'utf8').toString('base64'));
+              const stable = releases.find(r => !r.prerelease && !r.draft);
+              if (!stable) {
+                core.setOutput('body_b64', '');
+                return;
+              }
+              core.setOutput('body_b64', Buffer.from(stable.body || '', 'utf8').toString('base64'));
             } catch (error) {
               if (error.status === 404) {
                 core.setOutput('body_b64', '');
@@ -109,6 +120,7 @@ jobs:
         env:
           PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
+          IS_PRERELEASE: ${{ inputs.pre_release }}
           BUILD_RESUKISU: ${{ inputs.build_resukisu }}
           BUILD_SUKISU: ${{ inputs.build_sukisu }}
           BUILD_KSUNEXT: ${{ inputs.build_ksunext }}
@@ -390,8 +402,10 @@ jobs:
                   lines.extend(manager_lines)
                   lines.append('')
 
-              hidden_meta = {key: value for key, value in current_meta.items()}
-              lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
+              is_prerelease = env_flag('IS_PRERELEASE', default=False)
+              if not is_prerelease:
+                  hidden_meta = {key: value for key, value in current_meta.items()}
+                  lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
               return lines
 
 
@@ -414,7 +428,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}
-          name: ${{ steps.release_meta.outputs.name }}
+          name: ${{ inputs.pre_release && format('Pre-Release | {0}', steps.release_meta.outputs.name) || steps.release_meta.outputs.name }}
           files: ./release_zips/*.zip
           body_path: ./release_body.md
+          prerelease: ${{ inputs.pre_release }}
           generate_release_notes: false
