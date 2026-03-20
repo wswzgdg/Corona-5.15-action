@@ -127,6 +127,8 @@ touch ./common/.scmversion
 
 # build
 cd "$WORKDIR/kernel_workspace/kernel_platform/common"
+export KBUILD_BUILD_USER=ZakoBai♡
+export KBUILD_BUILD_HOST=XinRan
 make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
 make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
 
