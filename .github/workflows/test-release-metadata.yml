@@ -110,7 +110,7 @@ jobs:
                           'label': 'kernel_common_oplus',
                           'remote': 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
                           'branch': 'android13-5.15-lts',
-                          'commit': '0123456789abcdef0123456789abcdef01234567',
+                          'commit': 'abcdef0123456789abcdef0123456789abcdef01',
                       }],
                   },
                   '_ak3': {
@@ -149,7 +149,7 @@ jobs:
               body = output_path.read_text()
 
               assert '### 内核' in body
-              assert body.count('commit ') == 15
+              assert 'abcdef0...0123456' in body
               assert '### 刷机包' in body
               assert '- kpm: [`aaaaaaa...1111111`]' in body
               assert 'main:' not in body
