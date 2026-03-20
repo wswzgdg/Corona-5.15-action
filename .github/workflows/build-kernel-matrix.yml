@@ -409,6 +409,16 @@ jobs:
               ak3_repos = current_meta.get('_ak3', {}).get('repos', [])
               if ak3_repos:
                   previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
+                  if not previous_ak3:
+                      for section_key, section in previous_meta.items():
+                          if section_key.startswith('_'):
+                              continue
+                          for repo in section.get('repos', []):
+                              if repo.get('key') == 'ak3' and repo.get('commit'):
+                                  mapped_branch = AK3_BY_MANAGER.get(section_key, 'main')
+                                  legacy_key = f'ak3-{mapped_branch}'
+                                  if legacy_key not in previous_ak3:
+                                      previous_ak3[legacy_key] = {**repo, 'key': legacy_key}
                   lines.append('### 刷机包')
                   for repo in ak3_repos:
                       prev_repo = previous_ak3.get(repo['key'])
