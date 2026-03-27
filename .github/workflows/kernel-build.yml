@@ -123,6 +123,14 @@ jobs:
           chmod +x .github/workflows/all_managers/common.sh
           .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}"
 
+      - name: 删除同 key 的 ccache 缓存
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete "ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}" -R "${{ github.repository }}" || true
+
       - name: 保存 ccache 缓存
         if: always()
         continue-on-error: true
@@ -130,6 +138,14 @@ jobs:
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
+
+      - name: 删除同 key 的 repo 缓存
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete "repo-${{ runner.os }}-${{ github.sha }}" -R "${{ github.repository }}" || true
 
       - name: 保存 repo 缓存
         if: always()
