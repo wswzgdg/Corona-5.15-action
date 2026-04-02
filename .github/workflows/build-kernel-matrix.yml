@@ -505,7 +505,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: all-managers-${{ github.run_id }}
-          name: ${{ inputs.pre_release && format('预发布 | 全量构建 #{0}', github.run_number) || format('全量构建 #{0}', github.run_number) }}
+          name: "${{ inputs.pre_release && format('预发布 | 全量构建 #{0}', github.run_number) || format('全量构建 #{0}', github.run_number) }}"
           files: ./release_zips/*.zip
           body_path: ./release_body.md
           prerelease: ${{ inputs.pre_release }}
