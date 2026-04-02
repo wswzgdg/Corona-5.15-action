@@ -502,11 +502,14 @@ jobs:
           PYBODY
 
       - name: 发布 ZIP 包
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: all-managers-${{ github.run_id }}
-          name: "${{ inputs.pre_release && format('预发布 | 全量构建 #{0}', github.run_number) || format('全量构建 #{0}', github.run_number) }}"
-          files: ./release_zips/*.zip
-          body_path: ./release_body.md
-          prerelease: ${{ inputs.pre_release }}
-          generate_release_notes: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: all-managers-${{ github.run_id }}
+          RELEASE_NAME: "${{ inputs.pre_release && format('预发布 | 全量构建 #{0}', github.run_number) || format('全量构建 #{0}', github.run_number) }}"
+          PRERELEASE_FLAG: ${{ inputs.pre_release && '--prerelease' || '' }}
+        run: |
+          gh release create "$TAG_NAME" ./release_zips/*.zip \
+            --repo "${{ github.repository }}" \
+            --title "$RELEASE_NAME" \
+            --notes-file ./release_body.md \
+            $PRERELEASE_FLAG
