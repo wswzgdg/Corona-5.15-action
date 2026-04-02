@@ -73,6 +73,7 @@ case "$MANAGER" in
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
     if [ -n "$RESUKISU_CUSTOM" ]; then
+      # 仅覆盖 ReSukiSU 版本串中的 COMMIT_SHA 段，保持 tag 和 repo name 不变
       KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
         RESUKISU_CUSTOM_VALUE="$RESUKISU_CUSTOM" python3 - "$KSU_KBUILD" <<'PYKBUILD'

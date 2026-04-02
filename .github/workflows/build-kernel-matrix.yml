@@ -81,12 +81,7 @@ jobs:
           pattern: ak3-*
           merge-multiple: true
 
-      - name: 生成发布信息
-        id: release_meta
-        run: |
-          echo "tag=all-managers-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
-          echo "name=全量构建 #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-
+      # 读取最近一次稳定版的隐藏元数据，用于生成本次变更对比
       - name: 获取上一版发布元数据
         id: previous_release
         uses: actions/github-script@v8
@@ -247,7 +242,8 @@ jobs:
               return commits
 
 
-          def list_commits_range(remote, branch, from_commit, to_commit):
+          # 仅获取 from_commit..HEAD 区间提交；to_commit 恒为当前 FETCH_HEAD，无需额外传参
+          def list_commits_range(remote, branch, from_commit):
               tokenized_remote = with_github_token(remote)
               if is_private_release_repo(remote) and tokenized_remote == remote:
                   return None
@@ -374,7 +370,7 @@ jobs:
               common_line = render_common_compare_line(common_repo, previous_common)
               if common_line:
                   lines.append(common_line)
-                  range_commits = list_commits_range(common_repo['remote'], common_repo['branch'], previous_common['commit'], common_repo['commit'])
+                  range_commits = list_commits_range(common_repo['remote'], common_repo['branch'], previous_common['commit'])
                   if range_commits is not None:
                       for item in range_commits:
                           rendered = render_recent_commit_line(common_repo['remote'], item)
@@ -420,7 +416,7 @@ jobs:
                       compare_line = render_common_compare_line(repo, prev_repo)
                       if compare_line:
                           lines.append(compare_line)
-                          range_commits = list_commits_range(repo['remote'], repo['branch'], prev_repo['commit'], repo['commit'])
+                          range_commits = list_commits_range(repo['remote'], repo['branch'], prev_repo['commit'])
                           if range_commits is not None:
                               for item in range_commits:
                                   rendered = render_recent_commit_line(repo['remote'], item)
@@ -487,8 +483,8 @@ jobs:
       - name: 发布 ZIP 包
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_meta.outputs.tag }}
-          name: ${{ inputs.pre_release && format('预发布 | {0}', steps.release_meta.outputs.name) || steps.release_meta.outputs.name }}
+          tag_name: all-managers-${{ github.run_id }}
+          name: ${{ inputs.pre_release && format('预发布 | 全量构建 #{0}', github.run_number) || format('全量构建 #{0}', github.run_number) }}
           files: ./release_zips/*.zip
           body_path: ./release_body.md
           prerelease: ${{ inputs.pre_release }}
