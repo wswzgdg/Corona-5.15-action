@@ -3,6 +3,7 @@ set -e
 
 MANAGER="$1"
 KERNEL_SUFFIX="${2:-}"
+RESUKISU_CUSTOM="${3:-}"
 WORKDIR="$(pwd)"
 
 export PATH="/usr/lib/ccache:$PATH"
@@ -71,6 +72,24 @@ case "$MANAGER" in
     ;;
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
+    if [ -n "$RESUKISU_CUSTOM" ]; then
+      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
+      if [ -f "$KSU_KBUILD" ]; then
+        RESUKISU_CUSTOM_VALUE="$RESUKISU_CUSTOM" python3 - "$KSU_KBUILD" <<'PYKBUILD'
+from pathlib import Path
+import os
+import sys
+path = Path(sys.argv[1])
+value = os.environ['RESUKISU_CUSTOM_VALUE']
+text = path.read_text()
+old = 'KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")'
+new = f'KSU_COMMIT_SHA  := {value}'
+if old not in text:
+    raise SystemExit('KSU_COMMIT_SHA line not found')
+path.write_text(text.replace(old, new, 1))
+PYKBUILD
+      fi
+    fi
     ;;
   ksunext)
     curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs

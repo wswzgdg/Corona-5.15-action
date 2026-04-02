@@ -11,10 +11,6 @@ on:
         description: '内核后缀'
         required: false
         type: string
-      sukisu_custom:
-        description: 'SukiSU 自定义版本名'
-        required: false
-        type: string
       resukisu_custom:
         description: 'ReSukiSU 自定义版本名'
         required: false
@@ -121,7 +117,7 @@ jobs:
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
-          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}"
+          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.resukisu_custom }}"
 
       - name: 删除同 key 的 ccache 缓存
         if: always()

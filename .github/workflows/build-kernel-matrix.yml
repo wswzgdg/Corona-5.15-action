@@ -38,11 +38,6 @@ on:
         required: false
         type: string
         default: ""
-      sukisu_custom:
-        description: "SukiSU 自定义版本名(可空)"
-        required: false
-        type: string
-        default: ""
       resukisu_custom:
         description: "ReSukiSU 自定义版本名(可空)"
         required: false
@@ -65,7 +60,6 @@ jobs:
     with:
       manager: ${{ matrix.manager }}
       kernel_suffix: ${{ inputs.kernel_suffix }}
-      sukisu_custom: ${{ inputs.sukisu_custom }}
       resukisu_custom: ${{ inputs.resukisu_custom }}
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
       allow_fail: true
