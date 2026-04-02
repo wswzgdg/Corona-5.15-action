@@ -129,11 +129,14 @@ jobs:
           import tempfile
           from pathlib import Path
 
+          # 共享源码仓库：所有管理器都依赖同一份 common 内核源码
           COMMON_REPO = ('common', 'kernel_common_oplus', 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts')
+          # 刷机包仓库：不同管理器会映射到不同 AK3 分支
           AK3_REPOS = {
               'main': ('ak3-main', 'main', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
               'kpm': ('ak3-kpm', 'kpm', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
           }
+          # 各管理器源码仓库定义；用于生成发布说明中的版本来源
           MANAGER_REPOS = {
               'resukisu': ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'main'),
               'sukisu': ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
@@ -142,6 +145,7 @@ jobs:
               'kowsu': ('manager', 'KowSU', 'https://github.com/KOWX712/KernelSU.git', 'master'),
           }
           MANAGER_ORDER = ['resukisu', 'sukisu', 'ksunext', 'ksu', 'kowsu', 'none']
+          # workflow_dispatch 输入与 manager 名称的映射关系
           MANAGER_FLAGS = {
               'resukisu': 'BUILD_RESUKISU',
               'sukisu': 'BUILD_SUKISU',
@@ -150,6 +154,7 @@ jobs:
               'kowsu': 'BUILD_KOWSU',
               'none': 'BUILD_NONE',
           }
+          # 管理器到 AK3 分支的映射；用于决定需要比较哪个刷机包仓库
           AK3_BY_MANAGER = {
               'resukisu': 'kpm',
               'sukisu': 'kpm',
@@ -160,6 +165,7 @@ jobs:
           }
 
 
+          # 统一将仓库地址标准化为可点击的 GitHub HTTPS 链接
           def normalize_github_url(url):
               url = url.strip()
               if url.startswith('git@github.com:'):
@@ -176,6 +182,7 @@ jobs:
               return url
 
 
+          # 仅为私有仓库注入 token，公开仓库保持原始地址
           def with_github_token(remote):
               token = os.environ.get('KERNEL_COMMON_TOKEN', '').strip()
               if not token:
@@ -214,6 +221,7 @@ jobs:
               return output.split()[0]
 
 
+          # 默认拉取最近提交列表；内核仓库会在调用点单独提高数量
           def list_recent_commits(remote, branch, limit=15):
               tokenized_remote = with_github_token(remote)
               if is_private_release_repo(remote) and tokenized_remote == remote:
@@ -280,6 +288,7 @@ jobs:
               return [manager for manager in MANAGER_ORDER if env_flag(MANAGER_FLAGS[manager], True)]
 
 
+          # 将仓库定义转换为统一的元数据结构，便于后续渲染与比较
           def build_repo_entry(repo_tuple):
               key, label, remote, branch = repo_tuple
               return {
@@ -291,6 +300,7 @@ jobs:
               }
 
 
+          # 按当前勾选的管理器构造本次发布的源码元数据快照
           def build_current_meta(selected_managers):
               current = {
                   '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
@@ -351,6 +361,7 @@ jobs:
               return f'- `{commit[:7]}` {safe_subject}'
 
 
+          # 从上一版 release body 的隐藏注释中提取元数据快照
           def load_previous_meta(previous_body):
               match = re.search(r'<!-- source-meta-begin\r?\n(.*?)\r?\nsource-meta-end -->', previous_body, re.S)
               if not match:
@@ -361,11 +372,13 @@ jobs:
                   return {}
 
 
+          # 根据上一版隐藏元数据与当前快照，生成最终发布描述
           def build_release_lines(previous_meta, current_meta):
               lines = ['## 源码变更', '']
 
               common_repo = current_meta['_shared']['repos'][0]
               previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')
+              # 内核 common 仓库优先输出精确 compare；没有可比基线时再回退到最近提交列表
               lines.append('### 内核')
               common_line = render_common_compare_line(common_repo, previous_common)
               if common_line:
@@ -377,7 +390,7 @@ jobs:
                           if rendered:
                               lines.append(rendered)
                   else:
-                      recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=15)
+                      recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20)
                       for item in recent_commits:
                           rendered = render_recent_commit_line(common_repo['remote'], item)
                           if rendered:
@@ -385,7 +398,7 @@ jobs:
               elif previous_common and previous_common.get('commit') and previous_common.get('commit') == common_repo.get('commit'):
                   lines.append('- 无修改')
               else:
-                  recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=15)
+                  recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20)
                   if recent_commits:
                       for item in recent_commits:
                           rendered = render_recent_commit_line(common_repo['remote'], item)
@@ -401,6 +414,7 @@ jobs:
               if ak3_repos:
                   previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
                   if not previous_ak3:
+                      # 兼容旧版隐藏元数据结构；若完全拿不到上一版 AK3 元数据，则按“无修改”处理
                       for section_key, section in previous_meta.items():
                           if section_key.startswith('_'):
                               continue
@@ -410,9 +424,14 @@ jobs:
                                   legacy_key = f'ak3-{mapped_branch}'
                                   if legacy_key not in previous_ak3:
                                       previous_ak3[legacy_key] = {**repo, 'key': legacy_key}
+                  # AK3 仅在当前有需要的分支时输出；缺少上一版 AK3 元数据时按“无修改”处理
                   lines.append('### 刷机包')
+                  missing_previous_ak3 = not previous_ak3
                   for repo in ak3_repos:
                       prev_repo = previous_ak3.get(repo['key'])
+                      if missing_previous_ak3:
+                          lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
+                          continue
                       compare_line = render_common_compare_line(repo, prev_repo)
                       if compare_line:
                           lines.append(compare_line)
@@ -444,6 +463,7 @@ jobs:
                                   lines.append(rendered)
                   lines.append('')
 
+              # 管理器仓库只展示版本链接，不展开提交列表，避免发布说明过长
               manager_lines = []
               for manager in MANAGER_ORDER:
                   if manager not in current_meta or manager.startswith('_'):
@@ -460,11 +480,12 @@ jobs:
 
               is_prerelease = env_flag('IS_PRERELEASE', default=False)
               if not is_prerelease:
-                  hidden_meta = {key: value for key, value in current_meta.items()}
-                  lines.append(f"<!-- source-meta-begin\n{json.dumps(hidden_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
+                  # 正式版写入当前源码快照，供下次发布时做增量对比
+                  lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
               return lines
 
 
+          # 生成最终 release body，并在正式版中附带隐藏元数据
           def generate_release_body(output_path='release_body.md'):
               previous_body_b64 = os.environ.get('PREVIOUS_RELEASE_BODY_B64', '')
               previous_body = ''
