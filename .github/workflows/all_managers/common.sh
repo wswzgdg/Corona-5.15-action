@@ -70,7 +70,7 @@ case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
     if [ -n "$MANAGER_VERSION" ]; then
-      # 直接覆盖 SukiSU 实际生成的完整版本串
+      # 仅覆盖 SukiSU 版本串中的提交哈希段
       KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
         MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
@@ -80,10 +80,10 @@ import sys
 path = Path(sys.argv[1])
 value = os.environ['MANAGER_VERSION_VALUE']
 text = path.read_text()
-old = '    KSU_VERSION_FULL := $(call get_ksu_version_full,$(KSU_VERSION_API))'
-new = f'    KSU_VERSION_FULL := {value}'
+old = 'v$1-$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD)@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
+new = f'v$1-{value}@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
 if old not in text:
-    raise SystemExit('SukiSU KSU_VERSION_FULL line not found')
+    raise SystemExit('SukiSU version template line not found')
 path.write_text(text.replace(old, new, 1))
 PYKBUILD
       fi
@@ -92,7 +92,7 @@ PYKBUILD
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
     if [ -n "$MANAGER_VERSION" ]; then
-      # 直接覆盖 Kbuild 版本名格式，让管理器显示自定义完整版本串
+      # 仅覆盖 ReSukiSU 版本串中的提交哈希段
       KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
         MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
@@ -102,10 +102,10 @@ import sys
 path = Path(sys.argv[1])
 value = os.environ['MANAGER_VERSION_VALUE']
 text = path.read_text()
-old = 'KSU_VERSION_FULL := $(subst ",,$(CONFIG_KSU_FULL_NAME_FORMAT))'
-new = f'KSU_VERSION_FULL := {value}'
+old = 'KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")'
+new = f'KSU_COMMIT_SHA  := {value}'
 if old not in text:
-    raise SystemExit('KSU_VERSION_FULL line not found')
+    raise SystemExit('ReSukiSU KSU_COMMIT_SHA line not found')
 path.write_text(text.replace(old, new, 1))
 PYKBUILD
       fi
