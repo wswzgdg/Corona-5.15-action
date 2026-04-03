@@ -42,7 +42,7 @@ on:
         description: "管理器完整版本串"
         required: false
         type: string
-        default: ""
+        default: "Lone_trail"
       pre_release:
         description: "作为预发布 (不影响正式发布说明)"
         required: false
