@@ -33,18 +33,21 @@ on:
         required: true
         type: boolean
         default: true
+      # 这里改的是内核自身的版本后缀，会影响 setlocalversion 生成出来的内核名
       kernel_suffix:
-        description: "内核后缀(别加连字符,空为默认)"
+        description: "设置内核后缀"
         required: false
         type: string
         default: ""
+      # 这个输入不会改完整版本串，只会传给 sukisu / resukisu 去覆盖中间那段提交哈希
+      # 例如默认显示是 v4.1.0-abcdef12@ReSukiSU，这里只替换 abcdef12
       manager_version:
-        description: "管理器提交哈希"
+        description: "sukisu ultra & resukisu管理器提交哈希"
         required: false
         type: string
         default: "Lone_trail"
       pre_release:
-        description: "作为预发布 (不影响正式发布说明)"
+        description: "作为预发布"
         required: false
         type: boolean
         default: false
@@ -52,15 +55,21 @@ on:
 jobs:
   build:
     strategy:
+      # 这里串行跑各个 manager，避免多个大编译任务并发把 runner 资源打满
       max-parallel: 1
       fail-fast: false
       matrix:
+        # 逐个把同一套内核源码分别套到不同 manager 变体上构建
         manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
     uses: ./.github/workflows/kernel-build.yml
     with:
+      # 当前矩阵项正在构建哪个 manager，就把它传给复用工作流
       manager: ${{ matrix.manager }}
+      # 内核后缀原样传下去，只影响内核名，不影响管理器显示版本
       kernel_suffix: ${{ inputs.kernel_suffix }}
+      # 统一把 manager_version 传下去，由复用工作流内部判断是否只对 sukisu / resukisu 生效
       manager_version: ${{ inputs.manager_version }}
+      # 这里根据 workflow_dispatch 的勾选结果决定当前矩阵项是否真正执行
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
       allow_fail: true
     secrets: inherit
