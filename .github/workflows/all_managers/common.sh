@@ -73,7 +73,7 @@ case "$MANAGER" in
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
     if [ -n "$RESUKISU_CUSTOM" ]; then
-      # 仅覆盖 ReSukiSU 版本串中的 COMMIT_SHA 段，保持 tag 和 repo name 不变
+      # 直接覆盖 Kbuild 版本名格式，让管理器显示自定义完整版本串
       KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
         RESUKISU_CUSTOM_VALUE="$RESUKISU_CUSTOM" python3 - "$KSU_KBUILD" <<'PYKBUILD'
@@ -83,10 +83,10 @@ import sys
 path = Path(sys.argv[1])
 value = os.environ['RESUKISU_CUSTOM_VALUE']
 text = path.read_text()
-old = 'KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")'
-new = f'KSU_COMMIT_SHA  := {value}'
+old = 'KSU_VERSION_FULL := $(subst ",,$(CONFIG_KSU_FULL_NAME_FORMAT))'
+new = f'KSU_VERSION_FULL := {value}'
 if old not in text:
-    raise SystemExit('KSU_COMMIT_SHA line not found')
+    raise SystemExit('KSU_VERSION_FULL line not found')
 path.write_text(text.replace(old, new, 1))
 PYKBUILD
       fi
