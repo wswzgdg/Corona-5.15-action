@@ -239,32 +239,32 @@ jobs:
             if [[ -f "$KSU_KBUILD" ]]; then
               if [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" ]]; then
                 MANAGER_VERSION_VALUE="${{ github.event.inputs.manager_version }}" python3 - "$KSU_KBUILD" <<'PYKBUILD'
-from pathlib import Path
-import os
-import sys
-path = Path(sys.argv[1])
-value = os.environ['MANAGER_VERSION_VALUE']
-text = path.read_text()
-old = 'v$1-$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD)@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
-new = f'v$1-{value}@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
-if old not in text:
-    raise SystemExit('SukiSU version template line not found')
-path.write_text(text.replace(old, new, 1))
-PYKBUILD
+                from pathlib import Path
+                import os
+                import sys
+                path = Path(sys.argv[1])
+                value = os.environ['MANAGER_VERSION_VALUE']
+                text = path.read_text()
+                old = 'v$1-$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD)@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
+                new = f'v$1-{value}@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
+                if old not in text:
+                    raise SystemExit('SukiSU version template line not found')
+                path.write_text(text.replace(old, new, 1))
+                PYKBUILD
               elif [[ "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
                 MANAGER_VERSION_VALUE="${{ github.event.inputs.manager_version }}" python3 - "$KSU_KBUILD" <<'PYKBUILD'
-from pathlib import Path
-import os
-import sys
-path = Path(sys.argv[1])
-value = os.environ['MANAGER_VERSION_VALUE']
-text = path.read_text()
-old = 'KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")'
-new = f'KSU_COMMIT_SHA  := {value}'
-if old not in text:
-    raise SystemExit('ReSukiSU KSU_COMMIT_SHA line not found')
-path.write_text(text.replace(old, new, 1))
-PYKBUILD
+                from pathlib import Path
+                import os
+                import sys
+                path = Path(sys.argv[1])
+                value = os.environ['MANAGER_VERSION_VALUE']
+                text = path.read_text()
+                old = 'KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")'
+                new = f'KSU_COMMIT_SHA  := {value}'
+                if old not in text:
+                    raise SystemExit('ReSukiSU KSU_COMMIT_SHA line not found')
+                path.write_text(text.replace(old, new, 1))
+                PYKBUILD
               fi
             fi
           fi
