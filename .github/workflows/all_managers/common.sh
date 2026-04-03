@@ -69,6 +69,25 @@ cd common
 case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+    if [ -n "$KERNEL_SUFFIX" ]; then
+      # 直接覆盖 SukiSU 实际生成的完整版本串
+      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
+      if [ -f "$KSU_KBUILD" ]; then
+        SUKISU_CUSTOM_VALUE="$KERNEL_SUFFIX" python3 - "$KSU_KBUILD" <<'PYKBUILD'
+from pathlib import Path
+import os
+import sys
+path = Path(sys.argv[1])
+value = os.environ['SUKISU_CUSTOM_VALUE']
+text = path.read_text()
+old = '    KSU_VERSION_FULL := $(call get_ksu_version_full,$(KSU_VERSION_API))'
+new = f'    KSU_VERSION_FULL := {value}'
+if old not in text:
+    raise SystemExit('SukiSU KSU_VERSION_FULL line not found')
+path.write_text(text.replace(old, new, 1))
+PYKBUILD
+      fi
+    fi
     ;;
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
