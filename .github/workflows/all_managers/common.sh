@@ -3,7 +3,7 @@ set -e
 
 MANAGER="$1"
 KERNEL_SUFFIX="${2:-}"
-RESUKISU_CUSTOM="${3:-}"
+MANAGER_VERSION="${3:-}"
 WORKDIR="$(pwd)"
 
 export PATH="/usr/lib/ccache:$PATH"
@@ -69,16 +69,16 @@ cd common
 case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
-    if [ -n "$KERNEL_SUFFIX" ]; then
+    if [ -n "$MANAGER_VERSION" ]; then
       # 直接覆盖 SukiSU 实际生成的完整版本串
       KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
-        SUKISU_CUSTOM_VALUE="$KERNEL_SUFFIX" python3 - "$KSU_KBUILD" <<'PYKBUILD'
+        MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
 from pathlib import Path
 import os
 import sys
 path = Path(sys.argv[1])
-value = os.environ['SUKISU_CUSTOM_VALUE']
+value = os.environ['MANAGER_VERSION_VALUE']
 text = path.read_text()
 old = '    KSU_VERSION_FULL := $(call get_ksu_version_full,$(KSU_VERSION_API))'
 new = f'    KSU_VERSION_FULL := {value}'
@@ -91,16 +91,16 @@ PYKBUILD
     ;;
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
-    if [ -n "$RESUKISU_CUSTOM" ]; then
+    if [ -n "$MANAGER_VERSION" ]; then
       # 直接覆盖 Kbuild 版本名格式，让管理器显示自定义完整版本串
       KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
-        RESUKISU_CUSTOM_VALUE="$RESUKISU_CUSTOM" python3 - "$KSU_KBUILD" <<'PYKBUILD'
+        MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
 from pathlib import Path
 import os
 import sys
 path = Path(sys.argv[1])
-value = os.environ['RESUKISU_CUSTOM_VALUE']
+value = os.environ['MANAGER_VERSION_VALUE']
 text = path.read_text()
 old = 'KSU_VERSION_FULL := $(subst ",,$(CONFIG_KSU_FULL_NAME_FORMAT))'
 new = f'KSU_VERSION_FULL := {value}'

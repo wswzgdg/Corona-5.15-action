@@ -34,12 +34,12 @@ on:
         type: boolean
         default: true
       kernel_suffix:
-        description: "SukiSU 完整版本串(可空, 例如 v12.0.0-abc12345@SukiSU)"
+        description: "内核后缀(别加连字符,空为默认)"
         required: false
         type: string
         default: ""
-      resukisu_custom:
-        description: "ReSukiSU 完整版本串(可空, 例如 v4.1.0-32a5594@ReSukiSU)"
+      manager_version:
+        description: "管理器完整版本串"
         required: false
         type: string
         default: ""
@@ -60,7 +60,7 @@ jobs:
     with:
       manager: ${{ matrix.manager }}
       kernel_suffix: ${{ inputs.kernel_suffix }}
-      resukisu_custom: ${{ inputs.resukisu_custom }}
+      manager_version: ${{ inputs.manager_version }}
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
       allow_fail: true
     secrets: inherit
