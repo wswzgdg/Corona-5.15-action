@@ -39,7 +39,7 @@ on:
         type: string
         default: ""
       manager_version:
-        description: "管理器完整版本串"
+        description: "管理器提交哈希"
         required: false
         type: string
         default: "Lone_trail"

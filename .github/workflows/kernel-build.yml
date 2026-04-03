@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       manager_version:
-        description: '管理器完整版本串'
+        description: '管理器提交哈希'
         required: false
         type: string
       build_enabled:
