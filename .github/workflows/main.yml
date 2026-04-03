@@ -175,13 +175,13 @@ jobs:
         if: inputs.ccache_update
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_KEY: ${{ env.CCACHE_KEY }}-${{ runner.os }}-main
         run: |
           echo "正在清除旧 ccache 缓存..."
-          if gh cache delete ${{ env.CCACHE_KEY }}-${{ runner.os }}-main -R ${{ github.repository }}; then
-            echo "成功删除 ccache 缓存！"
-          else
-            echo "旧缓存不存在或已被清理！"
-          fi
+          gh api "repos/${{ github.repository }}/actions/caches?key=${CACHE_KEY}" --jq '.actions_caches[].id' | while read -r cache_id; do
+            [ -n "$cache_id" ] || continue
+            gh api -X DELETE "repos/${{ github.repository }}/actions/caches/${cache_id}" || true
+          done
       
       - name: 初始化并配置ccache
         run: |
