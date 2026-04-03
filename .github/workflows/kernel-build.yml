@@ -8,11 +8,11 @@ on:
         required: true
         type: string
       kernel_suffix:
-        description: '内核后缀'
+        description: 'SukiSU 完整版本串'
         required: false
         type: string
       resukisu_custom:
-        description: 'ReSukiSU 自定义版本名'
+        description: 'ReSukiSU 完整版本串'
         required: false
         type: string
       build_enabled:
