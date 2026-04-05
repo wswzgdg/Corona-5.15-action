@@ -226,6 +226,7 @@ else
   git clone -b main "$AK3_URL" --depth=1 AnyKernel3
 fi
 rm -rf ./AnyKernel3/.git
+rm -f ./AnyKernel3/module/Corona.zip
 CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
 git clone "$CORONA_URL" --depth=1 AnyKernel3/module/Corona
 rm -rf ./AnyKernel3/module/Corona/.git
