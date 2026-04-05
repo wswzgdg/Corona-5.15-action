@@ -11,10 +11,6 @@ on:
         description: '内核后缀'
         required: false
         type: string
-      manager_version:
-        description: '管理器提交哈希'
-        required: false
-        type: string
       build_enabled:
         description: '是否执行该 manager'
         required: false
@@ -117,7 +113,7 @@ jobs:
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
-          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.manager_version }}"
+          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}"
 
       - name: 覆盖同 key 的 ccache 缓存
         if: always()

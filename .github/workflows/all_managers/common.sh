@@ -4,8 +4,6 @@ set -e
 MANAGER="$1"
 # 第 2 个参数用于 setlocalversion，影响内核名后缀
 KERNEL_SUFFIX="${2:-}"
-# 第 3 个参数只用于 SukiSU / ReSukiSU 管理器显示版本中的哈希段
-MANAGER_VERSION="${3:-}"
 WORKDIR="$(pwd)"
 
 export PATH="/usr/lib/ccache:$PATH"
@@ -80,50 +78,9 @@ cd common
 case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
-    # 仅在手动提供 manager_version 时覆盖 SukiSU 显示版本中的哈希段
-    if [ -n "$MANAGER_VERSION" ]; then
-      # 保留 v版本号 和 @分支，仅替换中间的提交哈希
-      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU/kernel/Kbuild"
-      # setup.sh 会生成 KernelSU/kernel/Kbuild，这里只改显示版本模板中的哈希段
-      if [ -f "$KSU_KBUILD" ]; then
-        MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
-from pathlib import Path
-import os
-import sys
-path = Path(sys.argv[1])
-value = os.environ['MANAGER_VERSION_VALUE']
-text = path.read_text()
-old = 'v$1-$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD)@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
-new = f'v$1-{value}@$(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --abbrev-ref HEAD)'
-if old not in text:
-    raise SystemExit('SukiSU version template line not found')
-path.write_text(text.replace(old, new, 1))
-PYKBUILD
-      fi
-    fi
     ;;
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
-    # 仅在手动提供 manager_version 时覆盖 ReSukiSU 显示版本中的哈希段
-    if [ -n "$MANAGER_VERSION" ]; then
-      # 保留前后的 tag 和管理器名，仅替换 KSU_COMMIT_SHA
-      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU/kernel/Kbuild"
-      if [ -f "$KSU_KBUILD" ]; then
-        MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
-from pathlib import Path
-import os
-import sys
-path = Path(sys.argv[1])
-value = os.environ['MANAGER_VERSION_VALUE']
-text = path.read_text()
-old = 'KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")'
-new = f'KSU_COMMIT_SHA  := {value}'
-if old not in text:
-    raise SystemExit('ReSukiSU KSU_COMMIT_SHA line not found')
-path.write_text(text.replace(old, new, 1))
-PYKBUILD
-      fi
-    fi
     ;;
   ksunext)
     curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
