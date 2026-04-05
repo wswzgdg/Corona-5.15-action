@@ -235,7 +235,7 @@ jobs:
             echo "已选择无ROOT，跳过配置..."
           fi
           if [[ -n "${{ github.event.inputs.manager_version }}" ]]; then
-            KSU_KBUILD="$(pwd)/KernelSU/kernel/Kbuild"
+            KSU_KBUILD="$(pwd)/common/KernelSU/kernel/Kbuild"
             if [[ -f "$KSU_KBUILD" ]]; then
               if [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" ]]; then
                 MANAGER_VERSION_VALUE="${{ github.event.inputs.manager_version }}" python3 - "$KSU_KBUILD" <<'PYKBUILD'

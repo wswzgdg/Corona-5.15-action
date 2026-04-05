@@ -83,7 +83,7 @@ case "$MANAGER" in
     # 仅在手动提供 manager_version 时覆盖 SukiSU 显示版本中的哈希段
     if [ -n "$MANAGER_VERSION" ]; then
       # 保留 v版本号 和 @分支，仅替换中间的提交哈希
-      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
+      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU/kernel/Kbuild"
       # setup.sh 会生成 KernelSU/kernel/Kbuild，这里只改显示版本模板中的哈希段
       if [ -f "$KSU_KBUILD" ]; then
         MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
@@ -107,7 +107,7 @@ PYKBUILD
     # 仅在手动提供 manager_version 时覆盖 ReSukiSU 显示版本中的哈希段
     if [ -n "$MANAGER_VERSION" ]; then
       # 保留前后的 tag 和管理器名，仅替换 KSU_COMMIT_SHA
-      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/KernelSU/kernel/Kbuild"
+      KSU_KBUILD="$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU/kernel/Kbuild"
       if [ -f "$KSU_KBUILD" ]; then
         MANAGER_VERSION_VALUE="$MANAGER_VERSION" python3 - "$KSU_KBUILD" <<'PYKBUILD'
 from pathlib import Path
