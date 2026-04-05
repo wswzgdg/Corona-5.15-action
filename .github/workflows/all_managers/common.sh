@@ -222,6 +222,9 @@ fi
 # SukiSU / ReSukiSU 使用带 KPM 的打包分支，其余管理器继续使用 main 打包分支
 if [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; then
   git clone -b kpm "$AK3_URL" --depth=1 AnyKernel3
+  PATCH_URL=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
+  [ -n "$PATCH_URL" ] || { echo "未找到 patch_android release 资源"; exit 1; }
+  curl -fL "$PATCH_URL" -o ./AnyKernel3/patch/patch
 else
   git clone -b main "$AK3_URL" --depth=1 AnyKernel3
 fi
