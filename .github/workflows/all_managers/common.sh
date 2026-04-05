@@ -226,6 +226,12 @@ else
   git clone -b main "$AK3_URL" --depth=1 AnyKernel3
 fi
 rm -rf ./AnyKernel3/.git
+CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
+git clone "$CORONA_URL" --depth=1 AnyKernel3/module/Corona
+rm -rf ./AnyKernel3/module/Corona/.git
+rm -f ./AnyKernel3/module/Corona/LICENSE ./AnyKernel3/module/Corona/README.md
+(cd ./AnyKernel3/module/Corona && zip -r ../Corona.zip ./*)
+rm -rf ./AnyKernel3/module/Corona
 cp -f ./common/out/arch/arm64/boot/Image ./AnyKernel3/Image/Image
 
 case "$MANAGER" in
