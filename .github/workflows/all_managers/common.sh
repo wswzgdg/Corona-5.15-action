@@ -10,17 +10,7 @@ WORKDIR="$(pwd)"
 export PATH="/usr/lib/ccache:$PATH"
 export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
 
-# 如果上一次同步留下了 .repo，就先挪走，避免删工作目录时把 repo 元数据一起删掉
-if [ -d "kernel_workspace/.repo" ]; then
-  mv kernel_workspace/.repo "$WORKDIR/.repo_cache"
-fi
-# 重新创建干净的工作目录，只保留上面暂存的 .repo 元数据
-rm -rf kernel_workspace
-mkdir kernel_workspace
-# 把 repo 元数据放回去，这样 repo sync 可以继续复用已初始化的信息
-if [ -d "$WORKDIR/.repo_cache" ]; then
-  mv "$WORKDIR/.repo_cache" kernel_workspace/.repo
-fi
+mkdir -p kernel_workspace
 cd kernel_workspace
 # 未设置 SKIP_APT 时才安装依赖，方便在重复调用时跳过 apt 节省时间
 if [ -z "${SKIP_APT:-}" ]; then
@@ -33,18 +23,23 @@ if [ -z "${SKIP_APT:-}" ]; then
   sudo apt-get install -y     flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3     make cmake zip aria2 gnupg gawk rsync     binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf     tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386
 fi
 
-echo "正在克隆源码仓库..."
-repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m oneplus_ace3_b.xml --no-tags --depth=1
+if [ ! -d .repo ]; then
+  echo "初始化源码仓库..."
+  repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m oneplus_ace3_b.xml --no-tags --depth=1
+else
+  echo "复用已有源码仓库..."
+fi
 REPO_LAUNCHER="$PWD/.repo/repo/repo"
 # 优先使用仓库内 repo init 拉下来的 launcher，找不到时再退回系统 repo 命令
 if [ -x "$REPO_LAUNCHER" ]; then
-  "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle
+  "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
 else
-  repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle
+  repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
 fi
 
 cd kernel_platform
-rm -rf common
+rm -rf common AnyKernel3
+rm -rf "$WORKDIR/out_zips"
 COMMON_URL="https://github.com/Corona-oplus-kernel/kernel_common_oplus.git"
 # 有 token 时改用带鉴权地址，避免私有/限流场景下 clone 失败
 if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then

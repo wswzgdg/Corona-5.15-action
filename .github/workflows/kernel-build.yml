@@ -68,6 +68,8 @@ jobs:
           key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
           restore-keys: |
             ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-
+            ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-
+            ccache-5.15-${{ runner.os }}-
 
       - name: 清理 Runner 磁盘空间
         run: |
