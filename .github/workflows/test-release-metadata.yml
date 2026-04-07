@@ -104,7 +104,9 @@ jobs:
                   'BUILD_KSU': 'false',
                   'BUILD_KOWSU': 'false',
                   'BUILD_NONE': 'false',
+                  'BUILD_SUSFS': 'true',
               })
+              Path('successful_managers.json').write_text(json.dumps(['resukisu'], ensure_ascii=False))
               previous_meta = {
                   '_shared': {
                       'repos': [{
@@ -150,6 +152,8 @@ jobs:
               namespace['generate_release_body'](output_path)
               body = output_path.read_text()
 
+              assert '## 构建选项' in body
+              assert '- SUSFS: on' in body
               assert '### 内核' in body
               assert 'abcdef0...0123456' in body
               assert '### 刷机包' in body
@@ -163,6 +167,7 @@ jobs:
               assert '"key":"ak3-kpm"' in body
               assert '"key":"ak3-main"' not in body
           finally:
+              Path('successful_managers.json').unlink(missing_ok=True)
               subprocess.check_output = original_check_output
               os.environ.clear()
               os.environ.update(original_env)
