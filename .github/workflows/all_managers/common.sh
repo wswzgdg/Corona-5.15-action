@@ -83,9 +83,14 @@ case "$MANAGER" in
     else
       curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
     fi
+    if [ -d ./common/drivers/kernelsu ]; then
+      curl -fL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/refs/heads/${GITHUB_REF_NAME}/other_patch/apk_sign.patch" -o ./common/drivers/kernelsu/apk_sign.patch
+      (cd ./common/drivers/kernelsu && patch -p2 -N -F 3 < apk_sign.patch || true)
+      rm -f ./common/drivers/kernelsu/apk_sign.patch
+    fi
     ;;
   ksu)
-    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/dev/kernel/setup.sh" | bash -s dev
+    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
     ;;
   kowsu)
     curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
@@ -128,6 +133,8 @@ cd "$WORKDIR/kernel_workspace/kernel_platform"
 if [ "$MANAGER" != "none" ]; then
   DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
   echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+  echo "CONFIG_TMPFS_XATTR=y" >> "$DEFCONFIG"
+  echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$DEFCONFIG"
   if [ "$SUSFS_MODE" = "on" ]; then
     echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
     echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$DEFCONFIG"
