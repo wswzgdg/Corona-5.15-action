@@ -175,6 +175,13 @@ cd "$WORKDIR/kernel_workspace/kernel_platform/common"
 export KBUILD_BUILD_USER=ZakoBai♡
 export KBUILD_BUILD_HOST=XinRan
 make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
+if [ "$SUSFS_MODE" = "on" ]; then
+  if ! grep -qx 'CONFIG_KSU_SUSFS=y' out/.config; then
+    echo 'SUSFS requested (susfs:on) but CONFIG_KSU_SUSFS=y is missing from out/.config' >&2
+    grep 'CONFIG_KSU_SUSFS' out/.config || true
+    exit 1
+  fi
+fi
 make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
 
 # package
