@@ -87,6 +87,28 @@ jobs:
           pattern: ak3-*
           merge-multiple: true
 
+      - name: 记录成功发包的管理器
+        run: |
+          python3 - <<'PYART'
+          import json
+          import re
+          from pathlib import Path
+
+          success_managers = []
+          for path in sorted(Path('release_zips').glob('AK3-*.zip')):
+              match = re.match(r'^AK3-[^-]+-(.+?)@bai\.zip$', path.name)
+              if not match:
+                  continue
+              manager = match.group(1)
+              if manager == 'noksu':
+                  manager = 'none'
+              success_managers.append(manager.lower())
+
+          Path('successful_managers.json').write_text(
+              json.dumps(sorted(set(success_managers)), ensure_ascii=False)
+          )
+          PYART
+
       # 读取最近一次稳定版的隐藏元数据，用于生成本次变更对比
       - name: 获取上一版发布元数据
         id: previous_release
@@ -295,6 +317,17 @@ jobs:
               return [manager for manager in MANAGER_ORDER if env_flag(MANAGER_FLAGS[manager], True)]
 
 
+          def get_successful_managers(path='successful_managers.json'):
+              file_path = Path(path)
+              if not file_path.exists():
+                  return set()
+              try:
+                  data = json.loads(file_path.read_text())
+              except json.JSONDecodeError:
+                  return set()
+              return {str(item).strip().lower() for item in data if str(item).strip()}
+
+
           def get_susfs_label():
               return 'on' if env_flag('BUILD_SUSFS', default=True) else 'off'
 
@@ -312,7 +345,7 @@ jobs:
 
 
           # 按当前勾选的管理器构造本次发布的源码元数据快照
-          def build_current_meta(selected_managers):
+          def build_current_meta(selected_managers, successful_managers):
               current = {
                   '_build': {'susfs': get_susfs_label()},
                   '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
@@ -320,12 +353,12 @@ jobs:
               }
               required_ak3 = []
               for branch_name in ['main', 'kpm']:
-                  if any(AK3_BY_MANAGER[manager] == branch_name for manager in selected_managers):
+                  if any(AK3_BY_MANAGER[manager] == branch_name for manager in successful_managers):
                       required_ak3.append(branch_name)
               for branch_name in required_ak3:
                   current['_ak3']['repos'].append(build_repo_entry(AK3_REPOS[branch_name]))
               for manager in selected_managers:
-                  if manager in MANAGER_REPOS:
+                  if manager in MANAGER_REPOS and manager in successful_managers:
                       current[manager] = {'repos': [build_repo_entry(MANAGER_REPOS[manager])]}
               return current
 
@@ -505,7 +538,9 @@ jobs:
               if previous_body_b64:
                   previous_body = base64.b64decode(previous_body_b64).decode('utf-8')
               previous_meta = load_previous_meta(previous_body)
-              current_meta = build_current_meta(get_selected_managers())
+              selected_managers = get_selected_managers()
+              successful_managers = get_successful_managers()
+              current_meta = build_current_meta(selected_managers, successful_managers)
               lines = build_release_lines(previous_meta, current_meta)
               Path(output_path).write_text('\n'.join(lines) + '\n')
 
