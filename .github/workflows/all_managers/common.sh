@@ -6,7 +6,6 @@ MANAGER="$1"
 KERNEL_SUFFIX="${2:-}"
 SUSFS_MODE="${3:-on}"
 WORKDIR="$(pwd)"
-
 export PATH="/usr/lib/ccache:$PATH"
 export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
 

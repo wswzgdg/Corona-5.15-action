@@ -44,6 +44,12 @@ jobs:
           echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
           mkdir -p $HOME/.ccache_5.15
 
+      - name: 计算源码缓存键
+        run: |
+          set -e
+          MANIFEST_HEAD=$(git ls-remote https://github.com/Numbersf/kernel_manifest.git refs/heads/oneplus/sm8550 | awk '{print $1}')
+          echo "REPO_CACHE_KEY=repo-${{ runner.os }}-${MANIFEST_HEAD}-oneplus_ace3_b" >> "$GITHUB_ENV"
+
       - name: 载入 clang22 缓存
         uses: actions/cache@v5
         with:
@@ -53,10 +59,11 @@ jobs:
             clang22-llvm-22.1.0-${{ runner.os }}
 
       - name: 载入 repo 缓存
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
+        id: repo-restore
         with:
           path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.sha }}
+          key: ${{ env.REPO_CACHE_KEY }}
           restore-keys: |
             repo-${{ runner.os }}-
 
@@ -143,12 +150,12 @@ jobs:
           key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
 
       - name: 保存 repo 缓存
-        if: ${{ always() && inputs.manager == 'none' }}
+        if: ${{ always() && inputs.manager == 'none' && steps.repo-restore.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.sha }}
+          key: ${{ env.REPO_CACHE_KEY }}
 
       - name: 上传 ZIP 工件
         uses: actions/upload-artifact@v7
