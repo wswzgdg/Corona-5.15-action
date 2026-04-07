@@ -212,7 +212,7 @@ case "$MANAGER" in
   *) KSU_TYPENAME="$MANAGER";;
  esac
 
-AK3_NAME=AK3-${KERNEL_VERSION}-${KSU_TYPENAME}-susfs-${SUSFS_MODE}@bai.zip
+AK3_NAME=AK3-${KERNEL_VERSION}-${KSU_TYPENAME}@bai.zip
 mkdir -p "$WORKDIR/out_zips"
 (cd AnyKernel3 && zip -r "$WORKDIR/out_zips/$AK3_NAME" ./*)
 

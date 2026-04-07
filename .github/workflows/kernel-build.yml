@@ -151,6 +151,6 @@ jobs:
       - name: 上传 ZIP 工件
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ format('ak3-{0}-susfs-{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, inputs.susfs && 'on' || 'off') }}
+          name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
 
