@@ -11,6 +11,11 @@ on:
         description: '内核后缀'
         required: false
         type: string
+      susfs:
+        description: '是否启用 SUSFS'
+        required: false
+        type: boolean
+        default: true
       build_enabled:
         description: '是否执行该 manager'
         required: false
@@ -60,9 +65,9 @@ jobs:
         id: ccache-restore
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
+          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
           restore-keys: |
-            ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-
+            ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-
 
       - name: 清理 Runner 磁盘空间
         run: |
@@ -113,14 +118,14 @@ jobs:
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
-          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}"
+          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}"
 
       - name: 覆盖同 key 的 ccache 缓存
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
+          CACHE_KEY: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
         run: |
           gh api "repos/${{ github.repository }}/actions/caches?key=${CACHE_KEY}" --jq '.actions_caches[].id' | while read -r cache_id; do
             [ -n "$cache_id" ] || continue
@@ -133,7 +138,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
+          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
 
       - name: 保存 repo 缓存
         if: ${{ always() && inputs.manager == 'none' }}
@@ -146,6 +151,6 @@ jobs:
       - name: 上传 ZIP 工件
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
+          name: ${{ format('ak3-{0}-susfs-{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, inputs.susfs && 'on' || 'off') }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
 

@@ -4,6 +4,7 @@ set -e
 MANAGER="$1"
 # 第 2 个参数用于 setlocalversion，影响内核名后缀
 KERNEL_SUFFIX="${2:-}"
+SUSFS_MODE="${3:-on}"
 WORKDIR="$(pwd)"
 
 export PATH="/usr/lib/ccache:$PATH"
@@ -83,7 +84,11 @@ case "$MANAGER" in
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
     ;;
   ksunext)
-    curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+    if [ "$SUSFS_MODE" = "on" ]; then
+      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+    else
+      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
+    fi
     ;;
   ksu)
     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/dev/kernel/setup.sh" | bash -s dev
@@ -100,8 +105,8 @@ case "$MANAGER" in
 cd ..
 
 # SUSFS patch (skip none)
-# 只有启用了管理器才需要打 susfs 补丁；none 模式保持纯内核构建
-if [ "$MANAGER" != "none" ]; then
+# 只有启用了管理器且显式开启 SUSFS 时才打补丁；none 模式保持纯内核构建
+if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
   rm -rf susfs4ksu
   git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu susfs4ksu -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
   cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch ./common/
@@ -112,8 +117,8 @@ if [ "$MANAGER" != "none" ]; then
   cd ..
 fi
 
-# 只有原版 ksu 需要额外补这份兼容补丁，其他分支不走这里
-if [ "$MANAGER" = "ksu" ]; then
+# 只有原版 ksu 在启用 SUSFS 时需要额外补这份兼容补丁，其他分支不走这里
+if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
   # 目录存在才补，避免上游结构变化时直接报错退出
   if [ -d "./KernelSU" ]; then
     cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
@@ -125,25 +130,27 @@ fi
 
 # configs
 cd "$WORKDIR/kernel_workspace/kernel_platform"
-# 只要启用了任一管理器，就把 KSU / SUSFS 所需配置写进 defconfig
+# 只要启用了任一管理器，就把对应 KSU 配置写进 defconfig；SUSFS 开关按构建输入控制
 if [ "$MANAGER" != "none" ]; then
   DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
   echo "CONFIG_KSU=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
-  echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
+  if [ "$SUSFS_MODE" = "on" ]; then
+    echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
+    echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
+  fi
   # SukiSU / ReSukiSU 需要额外打开 KPM，其他管理器不写这个开关
   if [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; then
     echo "CONFIG_KPM=y" >> "$DEFCONFIG"
@@ -205,7 +212,7 @@ case "$MANAGER" in
   *) KSU_TYPENAME="$MANAGER";;
  esac
 
-AK3_NAME=AK3-${KERNEL_VERSION}-${KSU_TYPENAME}@bai.zip
+AK3_NAME=AK3-${KERNEL_VERSION}-${KSU_TYPENAME}-susfs-${SUSFS_MODE}@bai.zip
 mkdir -p "$WORKDIR/out_zips"
 (cd AnyKernel3 && zip -r "$WORKDIR/out_zips/$AK3_NAME" ./*)
 

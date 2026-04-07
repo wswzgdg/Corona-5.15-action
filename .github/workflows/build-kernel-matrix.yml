@@ -33,6 +33,11 @@ on:
         required: true
         type: boolean
         default: true
+      build_susfs:
+        description: "启用 SUSFS"
+        required: true
+        type: boolean
+        default: true
       # 这里改的是内核自身的版本后缀，会影响 setlocalversion 生成出来的内核名
       kernel_suffix:
         description: "设置内核后缀"
@@ -60,6 +65,7 @@ jobs:
       manager: ${{ matrix.manager }}
       # 内核后缀原样传下去，只影响内核名，不影响管理器显示版本
       kernel_suffix: ${{ inputs.kernel_suffix }}
+      susfs: ${{ inputs.build_susfs }}
       # 这里根据 workflow_dispatch 的勾选结果决定当前矩阵项是否真正执行
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
       allow_fail: true
@@ -118,6 +124,7 @@ jobs:
           BUILD_KSU: ${{ inputs.build_ksu }}
           BUILD_KOWSU: ${{ inputs.build_kowsu }}
           BUILD_NONE: ${{ inputs.build_none }}
+          BUILD_SUSFS: ${{ inputs.build_susfs }}
         run: |
           python3 - <<'PYBODY'
           import base64
@@ -288,6 +295,10 @@ jobs:
               return [manager for manager in MANAGER_ORDER if env_flag(MANAGER_FLAGS[manager], True)]
 
 
+          def get_susfs_label():
+              return 'on' if env_flag('BUILD_SUSFS', default=True) else 'off'
+
+
           # 将仓库定义转换为统一的元数据结构，便于后续渲染与比较
           def build_repo_entry(repo_tuple):
               key, label, remote, branch = repo_tuple
@@ -303,6 +314,7 @@ jobs:
           # 按当前勾选的管理器构造本次发布的源码元数据快照
           def build_current_meta(selected_managers):
               current = {
+                  '_build': {'susfs': get_susfs_label()},
                   '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
                   '_ak3': {'repos': []},
               }
@@ -374,7 +386,8 @@ jobs:
 
           # 根据上一版隐藏元数据与当前快照，生成最终发布描述
           def build_release_lines(previous_meta, current_meta):
-              lines = ['## 源码变更', '']
+              susfs_label = current_meta.get('_build', {}).get('susfs', get_susfs_label())
+              lines = [f'## 构建选项', '', f'- SUSFS: {susfs_label}', '', '## 源码变更', '']
 
               common_repo = current_meta['_shared']['repos'][0]
               previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')
@@ -505,7 +518,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: all-managers-${{ github.run_id }}
-          RELEASE_NAME: "${{ inputs.pre_release && format('预发布 | 全量构建 #{0}', github.run_number) || format('全量构建 #{0}', github.run_number) }}"
+          RELEASE_NAME: "${{ inputs.pre_release && format('预发布 | 全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') || format('全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') }}"
           PRERELEASE_FLAG: ${{ inputs.pre_release && '--prerelease' || '' }}
         run: |
           gh release create "$TAG_NAME" ./release_zips/*.zip \
