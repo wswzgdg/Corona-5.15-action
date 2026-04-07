@@ -135,20 +135,8 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ github.sha }}
 
-      - name: 覆盖同 key 的 repo 缓存
-        if: always()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: repo-${{ runner.os }}-${{ github.sha }}
-        run: |
-          gh api "repos/${{ github.repository }}/actions/caches?key=${CACHE_KEY}" --jq '.actions_caches[].id' | while read -r cache_id; do
-            [ -n "$cache_id" ] || continue
-            gh api -X DELETE "repos/${{ github.repository }}/actions/caches/${cache_id}" || true
-          done
-
       - name: 保存 repo 缓存
-        if: always()
+        if: ${{ always() && inputs.manager == 'none' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
