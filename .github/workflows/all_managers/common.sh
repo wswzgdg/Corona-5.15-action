@@ -69,6 +69,10 @@ for f in common/scripts/setlocalversion; do
 
 # setup manager
 cd common
+if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
+  echo 'Original KernelSU with susfs:on is currently unsupported by the upstream susfs4ksu patch set for this tree' >&2
+  exit 1
+fi
 # 先接入选中的管理器，再按需要覆盖显示版本中的提交哈希
 case "$MANAGER" in
   sukisu)
@@ -116,16 +120,9 @@ if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
   cd ..
 fi
 
-# 只有原版 ksu 在启用 SUSFS 时需要额外补这份兼容补丁，其他分支不走这里
-if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
-  # 目录存在才补，避免上游结构变化时直接报错退出
-  if [ -d "./KernelSU" ]; then
-    cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
-    cd ./KernelSU
-    patch -p1 < 10_enable_susfs_for_ksu.patch || true
-    cd ..
-  fi
-fi
+# susfs4ksu 自带的原版 KSU 兼容补丁基于旧版 tiann/KernelSU，
+# 当前上游会因它删掉关键 hook 对象而在链接阶段报大量 undefined symbol，
+# 这里不再对原版 ksu 额外套这份补丁。
 
 # configs
 cd "$WORKDIR/kernel_workspace/kernel_platform"
