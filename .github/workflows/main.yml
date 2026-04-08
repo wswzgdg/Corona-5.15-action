@@ -219,7 +219,7 @@ jobs:
             curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
           elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
             echo "正在配置KernelSU Next..."
-            curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
+            curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
           elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
             echo "正在配置原版 KernelSU (tiann/KernelSU)..."
             curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/dev/kernel/setup.sh" | bash -s dev

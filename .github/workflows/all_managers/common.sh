@@ -6,6 +6,7 @@ MANAGER="$1"
 KERNEL_SUFFIX="${2:-}"
 SUSFS_MODE="${3:-on}"
 WORKDIR="$(pwd)"
+
 export PATH="/usr/lib/ccache:$PATH"
 export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
 
@@ -69,10 +70,6 @@ for f in common/scripts/setlocalversion; do
 
 # setup manager
 cd common
-if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
-  echo 'Original KernelSU with susfs:on is currently unsupported by the upstream susfs4ksu patch set for this tree' >&2
-  exit 1
-fi
 # 先接入选中的管理器，再按需要覆盖显示版本中的提交哈希
 case "$MANAGER" in
   sukisu)
@@ -83,18 +80,13 @@ case "$MANAGER" in
     ;;
   ksunext)
     if [ "$SUSFS_MODE" = "on" ]; then
-      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
+      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
     else
       curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
     fi
-    if [ -d ./common/drivers/kernelsu ]; then
-      curl -fL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/refs/heads/${GITHUB_REF_NAME}/other_patch/apk_sign.patch" -o ./common/drivers/kernelsu/apk_sign.patch
-      (cd ./common/drivers/kernelsu && patch -p2 -N -F 3 < apk_sign.patch || true)
-      rm -f ./common/drivers/kernelsu/apk_sign.patch
-    fi
     ;;
   ksu)
-    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
+    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/dev/kernel/setup.sh" | bash -s dev
     ;;
   kowsu)
     curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
@@ -120,9 +112,16 @@ if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
   cd ..
 fi
 
-# susfs4ksu 自带的原版 KSU 兼容补丁基于旧版 tiann/KernelSU，
-# 当前上游会因它删掉关键 hook 对象而在链接阶段报大量 undefined symbol，
-# 这里不再对原版 ksu 额外套这份补丁。
+# 只有原版 ksu 在启用 SUSFS 时需要额外补这份兼容补丁，其他分支不走这里
+if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
+  # 目录存在才补，避免上游结构变化时直接报错退出
+  if [ -d "./KernelSU" ]; then
+    cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
+    cd ./KernelSU
+    patch -p1 < 10_enable_susfs_for_ksu.patch || true
+    cd ..
+  fi
+fi
 
 # configs
 cd "$WORKDIR/kernel_workspace/kernel_platform"
@@ -130,8 +129,6 @@ cd "$WORKDIR/kernel_workspace/kernel_platform"
 if [ "$MANAGER" != "none" ]; then
   DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
   echo "CONFIG_KSU=y" >> "$DEFCONFIG"
-  echo "CONFIG_TMPFS_XATTR=y" >> "$DEFCONFIG"
-  echo "CONFIG_TMPFS_POSIX_ACL=y" >> "$DEFCONFIG"
   if [ "$SUSFS_MODE" = "on" ]; then
     echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
     echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$DEFCONFIG"
@@ -172,13 +169,6 @@ cd "$WORKDIR/kernel_workspace/kernel_platform/common"
 export KBUILD_BUILD_USER=ZakoBai♡
 export KBUILD_BUILD_HOST=XinRan
 make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
-if [ "$SUSFS_MODE" = "on" ]; then
-  if ! grep -qx 'CONFIG_KSU_SUSFS=y' out/.config; then
-    echo 'SUSFS requested (susfs:on) but CONFIG_KSU_SUSFS=y is missing from out/.config' >&2
-    grep 'CONFIG_KSU_SUSFS' out/.config || true
-    exit 1
-  fi
-fi
 make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
 
 # package
