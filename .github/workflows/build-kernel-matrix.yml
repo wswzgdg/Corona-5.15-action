@@ -169,7 +169,7 @@ jobs:
           MANAGER_REPOS = {
               'resukisu': ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'main'),
               'sukisu': ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
-              'ksunext': ('manager', 'KSUNext', 'https://github.com/pershoot/KernelSU-Next.git', 'dev-susfs'),
+              'ksunext': ('manager', 'KSUNext', 'https://github.com/pershoot/KernelSU-Next.git', 'dev'),
               'ksu': ('manager', 'KernelSU', 'https://github.com/tiann/KernelSU.git', 'dev'),
               'kowsu': ('manager', 'KowSU', 'https://github.com/KOWX712/KernelSU.git', 'master'),
           }
