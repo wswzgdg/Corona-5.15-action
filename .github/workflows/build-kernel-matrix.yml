@@ -43,6 +43,11 @@ on:
         required: false
         type: boolean
         default: false
+      use_kpn:
+        description: "使用 KP-N patch 内核镜像"
+        required: false
+        type: boolean
+        default: false
       # 这里改的是内核自身的版本后缀，会影响 setlocalversion 生成出来的内核名
       kernel_suffix:
         description: "设置内核后缀"
@@ -72,6 +77,7 @@ jobs:
       kernel_suffix: ${{ inputs.kernel_suffix }}
       susfs: ${{ inputs.build_susfs }}
       ccache_update: ${{ inputs.ccache_update }}
+      use_kpn: ${{ inputs.use_kpn }}
       # 这里根据 workflow_dispatch 的勾选结果决定当前矩阵项是否真正执行
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
       allow_fail: true
@@ -153,6 +159,7 @@ jobs:
           BUILD_KOWSU: ${{ inputs.build_kowsu }}
           BUILD_NONE: ${{ inputs.build_none }}
           BUILD_SUSFS: ${{ inputs.build_susfs }}
+          BUILD_USE_KPN: ${{ inputs.use_kpn }}
         run: |
           python3 - <<'PYBODY'
           import base64
@@ -338,6 +345,10 @@ jobs:
               return 'on' if env_flag('BUILD_SUSFS', default=True) else 'off'
 
 
+          def get_kpn_label():
+              return 'on' if env_flag('BUILD_USE_KPN', default=False) else 'off'
+
+
           # 将仓库定义转换为统一的元数据结构，便于后续渲染与比较
           def build_repo_entry(repo_tuple):
               key, label, remote, branch = repo_tuple
@@ -353,13 +364,13 @@ jobs:
           # 按当前勾选的管理器构造本次发布的源码元数据快照
           def build_current_meta(selected_managers, successful_managers):
               current = {
-                  '_build': {'susfs': get_susfs_label()},
+                  '_build': {'susfs': get_susfs_label(), 'kpn': get_kpn_label()},
                   '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
                   '_ak3': {'repos': []},
               }
               required_ak3 = []
               for branch_name in ['main', 'kpm']:
-                  if any(AK3_BY_MANAGER[manager] == branch_name for manager in successful_managers):
+                  if any((AK3_BY_MANAGER[manager] if get_kpn_label() != 'on' else 'main') == branch_name for manager in successful_managers):
                       required_ak3.append(branch_name)
               for branch_name in required_ak3:
                   current['_ak3']['repos'].append(build_repo_entry(AK3_REPOS[branch_name]))
@@ -426,7 +437,8 @@ jobs:
           # 根据上一版隐藏元数据与当前快照，生成最终发布描述
           def build_release_lines(previous_meta, current_meta):
               susfs_label = current_meta.get('_build', {}).get('susfs', get_susfs_label())
-              lines = [f'## 构建选项', '', f'- SUSFS: {susfs_label}', '', '## 源码变更', '']
+              kpn_label = current_meta.get('_build', {}).get('kpn', get_kpn_label())
+              lines = [f'## 构建选项', '', f'- SUSFS: {susfs_label}', f'- KP-N: {kpn_label}', '', '## 源码变更', '']
 
               common_repo = current_meta['_shared']['repos'][0]
               previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')

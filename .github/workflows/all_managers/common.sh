@@ -5,6 +5,7 @@ MANAGER="$1"
 # 第 2 个参数用于 setlocalversion，影响内核名后缀
 KERNEL_SUFFIX="${2:-}"
 SUSFS_MODE="${3:-on}"
+USE_KPN="${4:-false}"
 WORKDIR="$(pwd)"
 
 export PATH="/usr/lib/ccache:$PATH"
@@ -146,8 +147,8 @@ if [ "$MANAGER" != "none" ]; then
     echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
     echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
   fi
-  # SukiSU / ReSukiSU 需要额外打开 KPM，其他管理器不写这个开关
-  if [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; then
+  # SukiSU / ReSukiSU 默认走内置 KPM；启用 KP-N 时跳过，避免重复 patch
+  if [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
     echo "CONFIG_KPM=y" >> "$DEFCONFIG"
   fi
 fi
@@ -171,6 +172,15 @@ export KBUILD_BUILD_HOST=XinRan
 make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
 make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
 
+if [ "$USE_KPN" = "true" ] && [ "$MANAGER" != "none" ]; then
+  cd "$WORKDIR/kernel_workspace/kernel_platform/common/out/arch/arm64/boot"
+  curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux -o ./kptools-linux
+  curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux -o ./kpimg-linux
+  chmod +x ./kptools-linux ./kpimg-linux
+  ./kptools-linux -p -i ./Image -k ./kpimg-linux -o ./oImage
+  mv -f ./oImage ./Image
+fi
+
 # package
 cd "$WORKDIR/kernel_workspace/kernel_platform"
 AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
@@ -178,8 +188,8 @@ AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
 if [ -n "${AK3_TOKEN:-}" ]; then
   AK3_URL="https://${AK3_TOKEN}@github.com/Corona-oplus-kernel/AnyKernel3"
 fi
-# SukiSU / ReSukiSU 使用带 KPM 的打包分支，其余管理器继续使用 main 打包分支
-if [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; then
+# SukiSU / ReSukiSU 默认使用带 KPM 的打包分支；启用 KP-N 时改回普通打包分支
+if [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
   git clone -b kpm "$AK3_URL" --depth=1 AnyKernel3
   PATCH_URL=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
   [ -n "$PATCH_URL" ] || { echo "未找到 patch_android release 资源"; exit 1; }

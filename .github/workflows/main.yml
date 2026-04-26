@@ -26,6 +26,11 @@ on:
         required: true
         type: boolean
         default: 'false'
+      use_kpn:
+        description: '使用KP-N patch内核镜像'
+        required: false
+        type: boolean
+        default: false
       kernel_suffix:
         description: '内核后缀(别加连字符,空为默认)'
         required: false
@@ -292,7 +297,7 @@ jobs:
           cd kernel_platform
           if [[ "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
             echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
-            if [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+            if [[ "${{ github.event.inputs.use_kpn }}" != "true" && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
               echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
             fi
           else
@@ -348,7 +353,17 @@ jobs:
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig
           
           make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
-          
+
+          if [[ "${{ github.event.inputs.use_kpn }}" == "true" && "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
+            cd ./out/arch/arm64/boot
+            curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-linux -o ./kptools-linux
+            curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kpimg-linux -o ./kpimg-linux
+            chmod +x ./kptools-linux ./kpimg-linux
+            ./kptools-linux -p -i ./Image -k ./kpimg-linux -o ./oImage
+            mv -f ./oImage ./Image
+            cd ../../../../..
+          fi
+
           echo "内核编译完成！"
           echo "ccache状态："
           ccache -s
@@ -374,7 +389,7 @@ jobs:
           else
             AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
           fi
-          if [[ "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+          if [[ "${{ github.event.inputs.use_kpn }}" != "true" && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
             git clone -b kpm "$AK3_URL" --depth=1
             PATCH_URL=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
             [ -n "$PATCH_URL" ] || { echo "未找到 patch_android release 资源"; exit 1; }

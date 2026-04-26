@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: false
+      use_kpn:
+        description: '是否在编译后使用 KP-N patch 内核镜像'
+        required: false
+        type: boolean
+        default: false
       build_enabled:
         description: '是否执行该 manager'
         required: false
@@ -129,7 +134,7 @@ jobs:
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
-          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}"
+          .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}" "${{ inputs.use_kpn && 'true' || 'false' }}"
 
       - name: 覆盖同 key 的 ccache 缓存
         if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
