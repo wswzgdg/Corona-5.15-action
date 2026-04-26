@@ -249,6 +249,9 @@ jobs:
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
             echo "正在配置SukiSU Ultra..."
             curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+            if [[ -f ./KernelSU/kernel/Kbuild ]]; then
+              sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-eternitylonely@Bai,v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
+            fi
           elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
             echo "正在配置ReSukiSU..."
             curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
@@ -326,6 +329,9 @@ jobs:
           cd kernel_platform
           if [[ "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
             echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+            if [[ "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+              echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-eternitylonely@Bai"' >> ./common/arch/arm64/configs/gki_defconfig
+            fi
             if [[ "${{ github.event.inputs.use_kpn }}" != "true" && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
               echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
             fi

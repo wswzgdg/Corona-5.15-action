@@ -75,6 +75,9 @@ cd common
 case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+    if [ -f "./KernelSU/kernel/Kbuild" ]; then
+      sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-eternitylonely@Bai,v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
+    fi
     ;;
   resukisu)
     curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
@@ -146,6 +149,9 @@ if [ "$MANAGER" != "none" ]; then
     echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$DEFCONFIG"
     echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
     echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
+  fi
+  if [ "$MANAGER" = "resukisu" ]; then
+    echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-eternitylonely@Bai"' >> "$DEFCONFIG"
   fi
   # SukiSU / ReSukiSU 默认走内置 KPM；启用 KP-N 时跳过，避免重复 patch
   if [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
