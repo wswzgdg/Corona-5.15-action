@@ -6,7 +6,15 @@ MANAGER="$1"
 KERNEL_SUFFIX="${2:-}"
 SUSFS_MODE="${3:-on}"
 USE_KPN="${4:-false}"
+VERSION_NAME_RAW="${5:-eternitylonely}"
 WORKDIR="$(pwd)"
+
+version_name_with_author() {
+  local raw_name="${1:-eternitylonely}"
+  printf '%s@Bai' "$raw_name"
+}
+
+VERSION_NAME_FULL="$(version_name_with_author "$VERSION_NAME_RAW")"
 
 export PATH="/usr/lib/ccache:$PATH"
 export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
@@ -76,7 +84,7 @@ case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
     if [ -f "./KernelSU/kernel/Kbuild" ]; then
-      sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-eternitylonely@Bai,v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
+      sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-'"$VERSION_NAME_FULL"',v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
     fi
     ;;
   resukisu)
@@ -151,7 +159,7 @@ if [ "$MANAGER" != "none" ]; then
     echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
   fi
   if [ "$MANAGER" = "resukisu" ]; then
-    echo 'CONFIG_KSU_FULL_NAME_FORMAT="%TAG_NAME%-eternitylonely@Bai"' >> "$DEFCONFIG"
+    echo "CONFIG_KSU_FULL_NAME_FORMAT=\"%TAG_NAME%-${VERSION_NAME_FULL}\"" >> "$DEFCONFIG"
   fi
   # SukiSU / ReSukiSU 默认走内置 KPM；启用 KP-N 时跳过，避免重复 patch
   if [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
