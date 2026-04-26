@@ -48,9 +48,10 @@ jobs:
                   ('https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts'): '0123456789abcdef0123456789abcdef01234567',
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'): '1111111111111111111111111111111111111111',
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'): '2222222222222222222222222222222222222222',
+                  ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kp-n'): '9999999999999999999999999999999999999999',
                   ('https://github.com/ReSukiSU/ReSukiSU.git', 'main'): '3333333333333333333333333333333333333333',
                   ('https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'): '4444444444444444444444444444444444444444',
-              }
+               }
 
               def fake_check_output(command, text=True, env=None, stderr=None, cwd=None):
                   recorded.append({'command': command, 'env': env, 'cwd': cwd})

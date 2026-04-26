@@ -177,6 +177,7 @@ jobs:
           AK3_REPOS = {
               'main': ('ak3-main', 'main', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
               'kpm': ('ak3-kpm', 'kpm', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
+              'kp-n': ('ak3-kp-n', 'kp-n', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kp-n'),
           }
           # 各管理器源码仓库定义；用于生成发布说明中的版本来源
           MANAGER_REPOS = {
@@ -205,6 +206,14 @@ jobs:
               'kowsu': 'main',
               'none': 'main',
           }
+
+
+          def get_ak3_branch(manager):
+              if manager == 'none':
+                  return 'main'
+              if get_kpn_label() == 'on':
+                  return 'kp-n'
+              return AK3_BY_MANAGER[manager]
 
 
           # 统一将仓库地址标准化为可点击的 GitHub HTTPS 链接
@@ -369,8 +378,8 @@ jobs:
                   '_ak3': {'repos': []},
               }
               required_ak3 = []
-              for branch_name in ['main', 'kpm']:
-                  if any((AK3_BY_MANAGER[manager] if get_kpn_label() != 'on' else 'main') == branch_name for manager in successful_managers):
+              for branch_name in ['main', 'kpm', 'kp-n']:
+                  if any(get_ak3_branch(manager) == branch_name for manager in successful_managers):
                       required_ak3.append(branch_name)
               for branch_name in required_ak3:
                   current['_ak3']['repos'].append(build_repo_entry(AK3_REPOS[branch_name]))
