@@ -182,6 +182,9 @@ fi
 # KP-N 走独立的 AnyKernel3 分支；SukiSU / ReSukiSU 默认继续使用带 KPM 的打包分支
 if [ "$USE_KPN" = "true" ] && [ "$MANAGER" != "none" ]; then
   git clone -b kp-n "$AK3_URL" --depth=1 AnyKernel3
+  curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-android -o ./AnyKernel3/patch/kptools
+  curl -fL https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/kpimg -o ./AnyKernel3/patch/kpimg
+  curl -fL https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip -o ./AnyKernel3/module/kpn.zip
 elif [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
   git clone -b kpm "$AK3_URL" --depth=1 AnyKernel3
   PATCH_URL=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
