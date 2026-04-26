@@ -14,7 +14,11 @@ version_name_with_author() {
   printf '%s@Bai' "$raw_name"
 }
 
-VERSION_NAME_FULL="$(version_name_with_author "$VERSION_NAME_RAW")"
+VERSION_NAME_TRIMMED="${VERSION_NAME_RAW//[[:space:]]/}"
+VERSION_NAME_FULL=""
+if [ -n "$VERSION_NAME_TRIMMED" ]; then
+  VERSION_NAME_FULL="$(version_name_with_author "$VERSION_NAME_RAW")"
+fi
 
 export PATH="/usr/lib/ccache:$PATH"
 export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
@@ -83,7 +87,7 @@ cd common
 case "$MANAGER" in
   sukisu)
     curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
-    if [ -f "./KernelSU/kernel/Kbuild" ]; then
+    if [ -n "$VERSION_NAME_FULL" ] && [ -f "./KernelSU/kernel/Kbuild" ]; then
       sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-'"$VERSION_NAME_FULL"',v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
     fi
     ;;
@@ -158,7 +162,7 @@ if [ "$MANAGER" != "none" ]; then
     echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
     echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> "$DEFCONFIG"
   fi
-  if [ "$MANAGER" = "resukisu" ]; then
+  if [ "$MANAGER" = "resukisu" ] && [ -n "$VERSION_NAME_FULL" ]; then
     echo "CONFIG_KSU_FULL_NAME_FORMAT=\"%TAG_NAME%-${VERSION_NAME_FULL}\"" >> "$DEFCONFIG"
   fi
   # SukiSU / ReSukiSU 默认走内置 KPM；启用 KP-N 时跳过，避免重复 patch

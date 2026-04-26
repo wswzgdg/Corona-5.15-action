@@ -253,13 +253,18 @@ jobs:
             local raw_name="${1:-eternitylonely}"
             printf '%s@Bai' "$raw_name"
           }
-          VERSION_NAME_FULL="$(version_name_with_author "${{ github.event.inputs.version_name }}")"
+          VERSION_NAME_RAW="${{ github.event.inputs.version_name }}"
+          VERSION_NAME_TRIMMED="${VERSION_NAME_RAW//[[:space:]]/}"
+          VERSION_NAME_FULL=""
+          if [[ -n "$VERSION_NAME_TRIMMED" ]]; then
+            VERSION_NAME_FULL="$(version_name_with_author "$VERSION_NAME_RAW")"
+          fi
           cd kernel_workspace
           cd kernel_platform/common
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
             echo "正在配置SukiSU Ultra..."
             curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
-            if [[ -f ./KernelSU/kernel/Kbuild ]]; then
+            if [[ -n "$VERSION_NAME_FULL" && -f ./KernelSU/kernel/Kbuild ]]; then
               sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-'"$VERSION_NAME_FULL"',v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
             fi
           elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
@@ -339,12 +344,17 @@ jobs:
             local raw_name="${1:-eternitylonely}"
             printf '%s@Bai' "$raw_name"
           }
-          VERSION_NAME_FULL="$(version_name_with_author "${{ github.event.inputs.version_name }}")"
+          VERSION_NAME_RAW="${{ github.event.inputs.version_name }}"
+          VERSION_NAME_TRIMMED="${VERSION_NAME_RAW//[[:space:]]/}"
+          VERSION_NAME_FULL=""
+          if [[ -n "$VERSION_NAME_TRIMMED" ]]; then
+            VERSION_NAME_FULL="$(version_name_with_author "$VERSION_NAME_RAW")"
+          fi
           cd kernel_workspace
           cd kernel_platform
           if [[ "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
             echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
-            if [[ "${{ github.event.inputs.ksu_type }}" == "resukisu" ]]; then
+            if [[ "${{ github.event.inputs.ksu_type }}" == "resukisu" && -n "$VERSION_NAME_FULL" ]]; then
               echo "CONFIG_KSU_FULL_NAME_FORMAT=\"%TAG_NAME%-${VERSION_NAME_FULL}\"" >> ./common/arch/arm64/configs/gki_defconfig
             fi
             if [[ "${{ github.event.inputs.use_kpn }}" != "true" && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
