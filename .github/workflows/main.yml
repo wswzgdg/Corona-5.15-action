@@ -47,6 +47,9 @@ jobs:
       actions: write
       contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: 清理 Runner 磁盘空间
         run: |
          mkdir -p /home/runner/.ccache_5.15
@@ -152,6 +155,10 @@ jobs:
             sed -i 's/ -dirty//g' "$f"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
           done
+
+          sudo cp -f "$GITHUB_WORKSPACE/lib/ccache-x86-64" /usr/bin/ccache
+          sudo chmod +x /usr/bin/ccache
+          ccache --version | head -n 1
 
       - name: 配置ccache目录
         run: |

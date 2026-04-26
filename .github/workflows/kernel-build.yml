@@ -142,6 +142,12 @@ jobs:
           sudo apt update -y
           sudo apt install -y             ccache flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3             make cmake zip aria2 gnupg gawk rsync             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf             tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386             repo
 
+      - name: 安装 ccache ECS
+        run: |
+          sudo cp -f ./lib/ccache-x86-64 /usr/bin/ccache
+          sudo chmod +x /usr/bin/ccache
+          ccache --version | head -n 1
+
       - name: 初始化 ccache
         run: |
           ccache -M ${{ env.CCACHE_MAXSIZE }}
