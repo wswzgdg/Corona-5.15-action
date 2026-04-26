@@ -62,6 +62,9 @@ on:
 
 jobs:
   build:
+    permissions:
+      actions: write
+      contents: read
     strategy:
       # 这里串行跑各个 manager，避免多个大编译任务并发把 runner 资源打满
       max-parallel: 1
