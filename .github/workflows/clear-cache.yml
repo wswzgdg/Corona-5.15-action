@@ -3,11 +3,26 @@ name: Clear Actions Cache
 on:
   workflow_dispatch:
     inputs:
-      prefix:
-        description: 'Cache key prefix to delete (e.g., ccache-5.15, repo-, clang22-)'
+      cache_type:
+        description: '要清理的缓存类型'
         required: true
+        type: choice
+        default: 'ccache'
+        options:
+          - 'ccache'
+          - 'repo'
+          - 'clang22'
+          - 'custom'
+      ref_name:
+        description: '分支名；用于 ccache/repo 前缀拼接'
+        required: false
         type: string
-        default: 'ccache-5.15'
+        default: 'main'
+      prefix:
+        description: '自定义缓存前缀；仅在 cache_type=custom 时使用'
+        required: false
+        type: string
+        default: ''
       dry_run:
         description: 'Only list matching caches, do not delete'
         required: true
@@ -25,14 +40,39 @@ jobs:
       - name: Delete caches by prefix
         env:
           GH_TOKEN: ${{ github.token }}
-          PREFIX: ${{ inputs.prefix }}
+          CACHE_TYPE: ${{ inputs.cache_type }}
+          REF_NAME: ${{ inputs.ref_name }}
+          CUSTOM_PREFIX: ${{ inputs.prefix }}
+          RUNNER_OS: ${{ runner.os }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
+
+          case "${CACHE_TYPE}" in
+            ccache)
+              PREFIX="ccache-5.15-${RUNNER_OS}-${REF_NAME}"
+              ;;
+            repo)
+              PREFIX="repo-${RUNNER_OS}-${REF_NAME}"
+              ;;
+            clang22)
+              PREFIX="clang22-llvm-22.1.0-${RUNNER_OS}"
+              ;;
+            custom)
+              PREFIX="${CUSTOM_PREFIX}"
+              ;;
+            *)
+              echo "未知的 cache_type: ${CACHE_TYPE}"
+              exit 1
+              ;;
+          esac
+
           if [ -z "${PREFIX}" ]; then
             echo "prefix 不能为空"
             exit 1
           fi
+
+          echo "缓存类型: ${CACHE_TYPE}"
           echo "查找缓存前缀: ${PREFIX}"
           ids=$(gh api --paginate -H "Accept: application/vnd.github+json" \
             /repos/${{ github.repository }}/actions/caches \

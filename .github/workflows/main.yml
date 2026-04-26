@@ -173,10 +173,11 @@ jobs:
           CACHE_KEY: ${{ env.CCACHE_KEY }}-${{ runner.os }}-main
         run: |
           echo "正在清除旧 ccache 缓存..."
-          gh api "repos/${{ github.repository }}/actions/caches?key=${CACHE_KEY}" --jq '.actions_caches[].id' | while read -r cache_id; do
-            [ -n "$cache_id" ] || continue
-            gh api -X DELETE "repos/${{ github.repository }}/actions/caches/${cache_id}" || true
-          done
+          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
+            echo "成功删除旧的 ccache 缓存！"
+          else
+            echo "旧缓存不存在或已被清理！"
+          fi
       
       - name: 初始化并配置ccache
         run: |
@@ -419,4 +420,3 @@ jobs:
           name: ${{ steps.create_zip.outputs.ak3name }}
           path: ${{ github.workspace }}/kernel_workspace/kernel_platform/AK3-*.zip
           archive: false
-

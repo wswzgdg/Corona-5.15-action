@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: true
+      ccache_update:
+        description: '是否覆盖更新 ccache 缓存'
+        required: false
+        type: boolean
+        default: false
       build_enabled:
         description: '是否执行该 manager'
         required: false
@@ -32,6 +37,9 @@ jobs:
     if: ${{ inputs.build_enabled }}
     continue-on-error: ${{ inputs.allow_fail }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -53,10 +61,11 @@ jobs:
             clang22-llvm-22.1.0-${{ runner.os }}
 
       - name: 载入 repo 缓存
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
+        id: repo-restore
         with:
           path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.sha }}
+          key: repo-${{ runner.os }}-${{ github.ref_name }}
           restore-keys: |
             repo-${{ runner.os }}-
 
@@ -65,10 +74,10 @@ jobs:
         id: ccache-restore
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
+          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}
           restore-keys: |
-            ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-
-            ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-
+            ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-
+            ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-
             ccache-5.15-${{ runner.os }}-
 
       - name: 清理 Runner 磁盘空间
@@ -123,24 +132,38 @@ jobs:
           .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}"
 
       - name: 覆盖同 key 的 ccache 缓存
-        if: always()
+        if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
+          CACHE_KEY: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}
         run: |
-          gh api "repos/${{ github.repository }}/actions/caches?key=${CACHE_KEY}" --jq '.actions_caches[].id' | while read -r cache_id; do
-            [ -n "$cache_id" ] || continue
-            gh api -X DELETE "repos/${{ github.repository }}/actions/caches/${cache_id}" || true
-          done
+          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
+            echo "已删除旧的 ccache 缓存: $CACHE_KEY"
+          else
+            echo "旧的 ccache 缓存不存在，直接保存新缓存"
+          fi
 
       - name: 保存 ccache 缓存
-        if: always()
+        if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}-${{ github.sha }}
+          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}-${{ inputs.susfs && 'on' || 'off' }}
+
+      - name: 覆盖同 key 的 repo 缓存
+        if: ${{ always() && inputs.manager == 'none' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_KEY: repo-${{ runner.os }}-${{ github.ref_name }}
+        run: |
+          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
+            echo "已删除旧的 repo 缓存: $CACHE_KEY"
+          else
+            echo "旧的 repo 缓存不存在，直接保存新缓存"
+          fi
 
       - name: 保存 repo 缓存
         if: ${{ always() && inputs.manager == 'none' }}
@@ -148,11 +171,10 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.sha }}
+          key: repo-${{ runner.os }}-${{ github.ref_name }}
 
       - name: 上传 ZIP 工件
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
-
