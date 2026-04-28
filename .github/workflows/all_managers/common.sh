@@ -47,7 +47,7 @@ if [ -z "${SKIP_APT:-}" ]; then
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
     echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
     sudo apt update -y
-    sudo apt install -y --no-install-recommends clang-23 lld-23
+    sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
   fi
 fi
 
