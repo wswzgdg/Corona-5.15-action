@@ -211,6 +211,8 @@ elif [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "
 else
   git clone -b main "$AK3_URL" --depth=1 AnyKernel3
 fi
+# 不同 AK3 分支目录结构不完全一致，补齐打包阶段会写入的目录。
+mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
 rm -rf ./AnyKernel3/.git
 rm -f ./AnyKernel3/module/Corona.zip
 CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
