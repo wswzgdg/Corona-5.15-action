@@ -25,6 +25,13 @@ toolchain_bin_dir() {
   printf '%s/bin' "$(toolchain_dir "$clang_version" "$root_dir")"
 }
 
+# Return the lib directory for the selected toolchain.
+toolchain_lib_dir() {
+  local clang_version="$1"
+  local root_dir="$2"
+  printf '%s/lib' "$(toolchain_dir "$clang_version" "$root_dir")"
+}
+
 # Return the clang binary path for the selected toolchain.
 toolchain_clang_bin() {
   local clang_version="$1"

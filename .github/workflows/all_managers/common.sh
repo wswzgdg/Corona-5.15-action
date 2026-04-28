@@ -26,6 +26,7 @@ fi
 
 export PATH="/usr/lib/ccache:$PATH"
 export PATH="$(toolchain_bin_dir "$LLVM_CLANG_VERSION" "$WORKDIR"):$PATH"
+export LD_LIBRARY_PATH="$(toolchain_lib_dir "$LLVM_CLANG_VERSION" "$WORKDIR")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 mkdir -p kernel_workspace
 cd kernel_workspace
