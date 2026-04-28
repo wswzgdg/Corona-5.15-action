@@ -35,7 +35,7 @@ on:
         description: 'LLVM/Clang 版本'
         required: false
         type: string
-        default: '22'
+        default: '23'
       build_enabled:
         description: '是否执行该 manager'
         required: false

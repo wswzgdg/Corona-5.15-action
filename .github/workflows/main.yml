@@ -44,7 +44,7 @@ on:
           - '14'
           - '22'
           - '23'
-        default: '22'
+        default: '23'
       kernel_suffix:
         description: '内核后缀(别加连字符,空为默认)'
         required: false

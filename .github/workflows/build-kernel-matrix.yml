@@ -61,7 +61,7 @@ on:
           - '14'
           - '22'
           - '23'
-        default: '22'
+        default: '23'
       # 这里改的是内核自身的版本后缀，会影响 setlocalversion 生成出来的内核名
       kernel_suffix:
         description: "设置内核后缀"
