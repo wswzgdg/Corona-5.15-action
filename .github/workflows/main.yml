@@ -96,11 +96,9 @@ jobs:
           sudo apt-mark hold libc-bin &&
           sudo apt purge -y man-db &&
           sudo rm -rf /var/lib/man-db/auto-update &&
-          sudo apt update &&
-          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache
-          sudo apt update -y && sudo apt install -y ccache
           sudo apt update -y
-          sudo apt install -y \
+          sudo apt install -y --no-install-recommends \
+          binutils \
           flex bison \
           dwarves \
           libssl-dev \
@@ -119,9 +117,9 @@ jobs:
           binutils-arm-linux-gnueabihf \
           tar gzip xz-utils bzip2 \
           device-tree-compiler \
-          libc6-dev-i386
-
-          sudo apt update -y && sudo apt install -y --no-install-recommends repo
+          libc6-dev-i386 \
+          ccache \
+          repo
           echo "正在克隆源码仓库..."
 
           repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m oneplus_ace3_b.xml --no-tags --depth=1
