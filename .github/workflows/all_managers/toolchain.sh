@@ -54,11 +54,16 @@ clang_version_label() {
 }
 
 # LLVM 23 comes from apt.llvm.org; cache a workspace copy after install.
+llvm23_runtime_ready() {
+  local clang_root="$1"
+  [ -x "$clang_root/bin/clang" ] && [ -e "$clang_root/lib/libclang-cpp.so.23.0" ]
+}
+
 ensure_llvm23_toolchain() {
   local root_dir="$1"
   local clang_root
   clang_root="$(toolchain_dir 23 "$root_dir")"
-  if [ -x "$clang_root/bin/clang" ]; then
+  if llvm23_runtime_ready "$clang_root"; then
     return 0
   fi
 
@@ -70,7 +75,7 @@ ensure_llvm23_toolchain() {
   sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
   mkdir -p "$root_dir/clang23"
   rm -rf "$clang_root"
-  cp -a /usr/lib/llvm-23 "$clang_root"
+  cp -aL /usr/lib/llvm-23 "$clang_root"
 }
 
 # Android clang14 uses the official Android prebuilts archive.

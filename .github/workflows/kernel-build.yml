@@ -92,9 +92,9 @@ jobs:
         id: clang23-restore
         with:
           path: ${{ github.workspace }}/clang23
-          key: clang23-apt-${{ runner.os }}
+          key: clang23-apt-v2-${{ runner.os }}
           restore-keys: |
-            clang23-apt-${{ runner.os }}
+            clang23-apt-v2-${{ runner.os }}
 
       - name: 载入 repo 缓存
         uses: actions/cache/restore@v5
@@ -232,7 +232,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/clang23
-          key: clang23-apt-${{ runner.os }}
+          key: clang23-apt-v2-${{ runner.os }}
 
       - name: 保存 clang14 缓存
         if: ${{ always() && inputs.clang_version == '14' && steps.clang14-restore.outputs.cache-hit != 'true' }}

@@ -120,9 +120,9 @@ jobs:
         id: clang23-restore
         with:
           path: ${{ github.workspace }}/kernel_workspace/clang23
-          key: clang23-apt-${{ runner.os }}
+          key: clang23-apt-v2-${{ runner.os }}
           restore-keys: |
-            clang23-apt-${{ runner.os }}
+            clang23-apt-v2-${{ runner.os }}
      
       - name: 安装环境依赖+初始化源码仓库及工具链
         env:
@@ -484,7 +484,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ github.workspace }}/kernel_workspace/clang23
-          key: clang23-apt-${{ runner.os }}
+          key: clang23-apt-v2-${{ runner.os }}
          
       - name: 克隆 AnyKernel3 并打包
         id: create_zip

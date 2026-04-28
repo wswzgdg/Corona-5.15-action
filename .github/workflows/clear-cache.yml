@@ -65,7 +65,7 @@ jobs:
               PREFIXES="clang22-llvm-22.1.0-${RUNNER_OS}"
               ;;
             clang23)
-              PREFIXES="clang23-apt-${RUNNER_OS}"
+              PREFIXES="clang23-apt-v2-${RUNNER_OS}"
               ;;
             custom)
               PREFIXES="${CUSTOM_PREFIX}"
