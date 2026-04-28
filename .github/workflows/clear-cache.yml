@@ -49,21 +49,22 @@ jobs:
         run: |
           set -euo pipefail
 
+          PREFIXES=""
           case "${CACHE_TYPE}" in
             ccache)
-              PREFIX="ccache-5.15-${RUNNER_OS}-${REF_NAME}"
+              PREFIXES="ccache-5.15-${RUNNER_OS}-${REF_NAME}\nccache-neov4-5.15-${RUNNER_OS}-${REF_NAME}"
               ;;
             repo)
-              PREFIX="repo-${RUNNER_OS}-${REF_NAME}"
+              PREFIXES="repo-${RUNNER_OS}-${REF_NAME}"
               ;;
             clang22)
-              PREFIX="clang22-llvm-22.1.0-${RUNNER_OS}"
+              PREFIXES="clang22-llvm-22.1.0-${RUNNER_OS}"
               ;;
             clang23)
-              PREFIX="clang23-apt-${RUNNER_OS}"
+              PREFIXES="clang23-apt-${RUNNER_OS}"
               ;;
             custom)
-              PREFIX="${CUSTOM_PREFIX}"
+              PREFIXES="${CUSTOM_PREFIX}"
               ;;
             *)
               echo "未知的 cache_type: ${CACHE_TYPE}"
@@ -71,16 +72,25 @@ jobs:
               ;;
           esac
 
-          if [ -z "${PREFIX}" ]; then
+          if [ -z "${PREFIXES}" ]; then
             echo "prefix 不能为空"
             exit 1
           fi
 
           echo "缓存类型: ${CACHE_TYPE}"
-          echo "查找缓存前缀: ${PREFIX}"
-          ids=$(gh api --paginate -H "Accept: application/vnd.github+json" \
-            /repos/${{ github.repository }}/actions/caches \
-            -q '.actions_caches[] | select(.key | startswith(env.PREFIX)) | .id')
+          echo "查找缓存前缀:"
+          printf '%b\n' "${PREFIXES}"
+          ids=""
+          while IFS= read -r PREFIX; do
+            [ -n "${PREFIX}" ] || continue
+            current_ids=$(gh api --paginate -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/actions/caches \
+              -q '.actions_caches[] | select(.key | startswith(env.PREFIX)) | .id')
+            if [ -n "${current_ids}" ]; then
+              ids=$(printf '%s\n%s\n' "${ids}" "${current_ids}")
+            fi
+          done < <(printf '%b\n' "${PREFIXES}")
+          ids=$(printf '%s\n' "${ids}" | rg '^[0-9]+$' | sort -u || true)
 
           if [ -z "${ids}" ]; then
             echo "未找到匹配缓存"

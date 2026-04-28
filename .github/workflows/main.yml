@@ -93,6 +93,16 @@ jobs:
           df -h
           echo "当前根分区可用空间：$(df -B GB / | grep / | awk '{print $4}')"
 
+      - name: 载入 clang22 缓存
+        if: ${{ github.event.inputs.clang_version == '22' }}
+        uses: actions/cache/restore@v5
+        id: clang22-restore
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/clang22
+          key: clang22-llvm-22.1.0-${{ runner.os }}
+          restore-keys: |
+            clang22-llvm-22.1.0-${{ runner.os }}
+
       - name: 载入 clang23 缓存
         if: ${{ github.event.inputs.clang_version == '23' }}
         uses: actions/cache/restore@v5
@@ -460,6 +470,13 @@ jobs:
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ env.CCACHE_KEY }}-${{ runner.os }}-main
+
+      - name: 保存 clang22 缓存
+        if: ${{ github.event.inputs.clang_version == '22' && steps.clang22-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/clang22
+          key: clang22-llvm-22.1.0-${{ runner.os }}
 
       - name: 保存 clang23 缓存
         if: ${{ github.event.inputs.clang_version == '23' && steps.clang23-restore.outputs.cache-hit != 'true' }}
