@@ -18,28 +18,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Test release metadata script
         run: |
           python3 - <<'PY'
           import base64
+          import importlib.util
           import json
           import os
-          import subprocess
-          import textwrap
           from pathlib import Path
 
-          workflow = Path('.github/workflows/build-kernel-matrix.yml').read_text()
-          marker = "python3 - <<'PYBODY'\n"
-          start = workflow.index(marker) + len(marker)
-          end = workflow.index("\n          PYBODY", start)
-          script = textwrap.dedent(workflow[start:end])
+          module_path = Path('.github/workflows/all_managers/release_metadata.py')
+          spec = importlib.util.spec_from_file_location('release_metadata', module_path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
 
-          namespace = {}
-          exec(script, namespace)
-
-          original_check_output = subprocess.check_output
+          original_check_output = module.subprocess.check_output
           original_env = os.environ.copy()
           try:
               recorded = []
@@ -61,7 +57,7 @@ jobs:
                       clean_remote = remote.replace('https://secret-token@github.com/', 'https://github.com/')
                       commit = commit_map.get((clean_remote, branch))
                       if not commit:
-                          raise subprocess.CalledProcessError(128, command, output='fatal: missing ref')
+                          raise module.subprocess.CalledProcessError(128, command, output='fatal: missing ref')
                       return f'{commit}\trefs/heads/{branch}\n'
                   if command[:2] == ['git', 'init']:
                       return 'Initialized empty Git repository\n'
@@ -77,10 +73,10 @@ jobs:
                       ) + '\n'
                   raise AssertionError(f'unexpected command: {command}')
 
-              subprocess.check_output = fake_check_output
+              module.subprocess.check_output = fake_check_output
 
               os.environ['KERNEL_COMMON_TOKEN'] = 'secret-token'
-              commit = namespace['ls_remote_commit'](
+              commit = module.ls_remote_commit(
                   'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
                   'android13-5.15-lts',
               )
@@ -90,7 +86,7 @@ jobs:
 
               calls_before = len(recorded)
               os.environ.pop('KERNEL_COMMON_TOKEN', None)
-              commit = namespace['ls_remote_commit'](
+              commit = module.ls_remote_commit(
                   'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
                   'android13-5.15-lts',
               )
@@ -150,7 +146,7 @@ jobs:
               os.environ['PREVIOUS_RELEASE_BODY_B64'] = base64.b64encode(previous_body.encode()).decode()
 
               output_path = Path('release_body_test.md')
-              namespace['generate_release_body'](output_path)
+              module.generate_release_body(output_path)
               body = output_path.read_text()
 
               assert '## 构建选项' in body
@@ -169,7 +165,8 @@ jobs:
               assert '"key":"ak3-main"' not in body
           finally:
               Path('successful_managers.json').unlink(missing_ok=True)
-              subprocess.check_output = original_check_output
+              Path('release_body_test.md').unlink(missing_ok=True)
+              module.subprocess.check_output = original_check_output
               os.environ.clear()
               os.environ.update(original_env)
           PY
