@@ -47,13 +47,15 @@ AK3_BY_MANAGER = {
     'kowsu': 'main',
     'none': 'main',
 }
+ZIP_NAME_PATTERN = re.compile(r'^AK3-[^-]+-(.+?)@bai\.zip$')
+SOURCE_META_PATTERN = re.compile(r'<!-- source-meta-begin\r?\n(.*?)\r?\nsource-meta-end -->', re.S)
 
 
 def collect_artifact_metadata(release_dir='release_zips', clang_meta_dir='clang_meta'):
     """Summarize successful managers and the resolved clang version label."""
     success_managers = []
     for path in sorted(Path(release_dir).glob('AK3-*.zip')):
-        match = re.match(r'^AK3-[^-]+-(.+?)@bai\.zip$', path.name)
+        match = ZIP_NAME_PATTERN.match(path.name)
         if not match:
             continue
         manager = match.group(1)
@@ -308,7 +310,7 @@ def render_recent_commit_line(remote, item):
 
 def load_previous_meta(previous_body):
     """Extract the hidden JSON snapshot from the previous stable release body."""
-    match = re.search(r'<!-- source-meta-begin\r?\n(.*?)\r?\nsource-meta-end -->', previous_body, re.S)
+    match = SOURCE_META_PATTERN.search(previous_body)
     if not match:
         return {}
     try:
@@ -317,12 +319,16 @@ def load_previous_meta(previous_body):
         return {}
 
 
-def build_release_lines(previous_meta, current_meta):
-    """Render the markdown lines for the release body."""
-    susfs_label = current_meta.get('_build', {}).get('susfs', get_susfs_label())
-    kpn_label = current_meta.get('_build', {}).get('kpn', get_kpn_label())
-    lines = [f'## 构建选项', '', f'- SUSFS: {susfs_label}', f'- KP-N: {kpn_label}', '', '## 源码变更', '']
+def append_rendered_commits(lines, remote, commits):
+    """Append rendered commit lines and skip entries that cannot be rendered."""
+    for item in commits:
+        rendered = render_recent_commit_line(remote, item)
+        if rendered:
+            lines.append(rendered)
 
+
+def append_common_section(lines, current_meta, previous_meta):
+    """Render the kernel common repository section."""
     common_repo = current_meta['_shared']['repos'][0]
     previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')
     lines.append('### 内核')
@@ -331,82 +337,77 @@ def build_release_lines(previous_meta, current_meta):
         lines.append(common_line)
         range_commits = list_commits_range(common_repo['remote'], common_repo['branch'], previous_common['commit'])
         if range_commits is not None:
-            for item in range_commits:
-                rendered = render_recent_commit_line(common_repo['remote'], item)
-                if rendered:
-                    lines.append(rendered)
+            append_rendered_commits(lines, common_repo['remote'], range_commits)
         else:
-            recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20)
-            for item in recent_commits:
-                rendered = render_recent_commit_line(common_repo['remote'], item)
-                if rendered:
-                    lines.append(rendered)
+            append_rendered_commits(lines, common_repo['remote'], list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20))
     elif previous_common and previous_common.get('commit') and previous_common.get('commit') == common_repo.get('commit'):
         lines.append('- 无修改')
     else:
         recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20)
         if recent_commits:
-            for item in recent_commits:
-                rendered = render_recent_commit_line(common_repo['remote'], item)
-                if rendered:
-                    lines.append(rendered)
+            append_rendered_commits(lines, common_repo['remote'], recent_commits)
         else:
             rendered = render_hash_line(common_repo['label'], common_repo, previous_common)
             if rendered:
                 lines.append(rendered)
     lines.append('')
 
-    ak3_repos = current_meta.get('_ak3', {}).get('repos', [])
-    if ak3_repos:
-        previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
-        if not previous_ak3:
-            for section_key, section in previous_meta.items():
-                if section_key.startswith('_'):
-                    continue
-                for repo in section.get('repos', []):
-                    if repo.get('key') == 'ak3' and repo.get('commit'):
-                        mapped_branch = AK3_BY_MANAGER.get(section_key, 'main')
-                        legacy_key = f'ak3-{mapped_branch}'
-                        if legacy_key not in previous_ak3:
-                            previous_ak3[legacy_key] = {**repo, 'key': legacy_key}
-        lines.append('### 刷机包')
-        missing_previous_ak3 = not previous_ak3
-        for repo in ak3_repos:
-            prev_repo = previous_ak3.get(repo['key'])
-            if missing_previous_ak3:
-                lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
-                continue
-            compare_line = render_common_compare_line(repo, prev_repo)
-            if compare_line:
-                lines.append(compare_line)
-                range_commits = list_commits_range(repo['remote'], repo['branch'], prev_repo['commit'])
-                if range_commits is not None:
-                    for item in range_commits:
-                        rendered = render_recent_commit_line(repo['remote'], item)
-                        if rendered:
-                            lines.append(rendered)
-                else:
-                    recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
-                    for item in recent_commits:
-                        rendered = render_recent_commit_line(repo['remote'], item)
-                        if rendered:
-                            lines.append(rendered)
-            elif prev_repo and prev_repo.get('commit') and prev_repo.get('commit') == repo.get('commit'):
-                lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
-            else:
-                recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
-                if recent_commits:
-                    lines.append(f"**{repo['label']}**")
-                    for item in recent_commits:
-                        rendered = render_recent_commit_line(repo['remote'], item)
-                        if rendered:
-                            lines.append(rendered)
-                else:
-                    rendered = render_hash_line(repo['label'], repo, prev_repo)
-                    if rendered:
-                        lines.append(rendered)
-        lines.append('')
 
+def build_previous_ak3_map(previous_meta):
+    """Normalize current and legacy AK3 metadata into one lookup map."""
+    previous_ak3 = {repo['key']: repo for repo in previous_meta.get('_ak3', {}).get('repos', [])}
+    if previous_ak3:
+        return previous_ak3
+    for section_key, section in previous_meta.items():
+        if section_key.startswith('_'):
+            continue
+        for repo in section.get('repos', []):
+            if repo.get('key') == 'ak3' and repo.get('commit'):
+                mapped_branch = AK3_BY_MANAGER.get(section_key, 'main')
+                legacy_key = f'ak3-{mapped_branch}'
+                if legacy_key not in previous_ak3:
+                    previous_ak3[legacy_key] = {**repo, 'key': legacy_key}
+    return previous_ak3
+
+
+def append_ak3_section(lines, current_meta, previous_meta):
+    """Render AnyKernel3 branch changes when the current release uses them."""
+    ak3_repos = current_meta.get('_ak3', {}).get('repos', [])
+    if not ak3_repos:
+        return
+
+    previous_ak3 = build_previous_ak3_map(previous_meta)
+    lines.append('### 刷机包')
+    missing_previous_ak3 = not previous_ak3
+    for repo in ak3_repos:
+        prev_repo = previous_ak3.get(repo['key'])
+        if missing_previous_ak3:
+            lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
+            continue
+        compare_line = render_common_compare_line(repo, prev_repo)
+        if compare_line:
+            lines.append(compare_line)
+            range_commits = list_commits_range(repo['remote'], repo['branch'], prev_repo['commit'])
+            if range_commits is not None:
+                append_rendered_commits(lines, repo['remote'], range_commits)
+            else:
+                append_rendered_commits(lines, repo['remote'], list_recent_commits(repo['remote'], repo['branch'], limit=15))
+        elif prev_repo and prev_repo.get('commit') and prev_repo.get('commit') == repo.get('commit'):
+            lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
+        else:
+            recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
+            if recent_commits:
+                lines.append(f"**{repo['label']}**")
+                append_rendered_commits(lines, repo['remote'], recent_commits)
+            else:
+                rendered = render_hash_line(repo['label'], repo, prev_repo)
+                if rendered:
+                    lines.append(rendered)
+    lines.append('')
+
+
+def append_manager_section(lines, current_meta, previous_meta):
+    """Render manager source versions as a compact section."""
     manager_lines = []
     for manager in MANAGER_ORDER:
         if manager not in current_meta or manager.startswith('_'):
@@ -416,14 +417,29 @@ def build_release_lines(previous_meta, current_meta):
         rendered = render_hash_line(repo['label'], repo, previous_repo)
         if rendered:
             manager_lines.append(rendered)
-    if manager_lines:
-        lines.append('### 管理器')
-        lines.extend(manager_lines)
-        lines.append('')
+    if not manager_lines:
+        return
+    lines.append('### 管理器')
+    lines.extend(manager_lines)
+    lines.append('')
 
+
+def append_hidden_meta(lines, current_meta):
+    """Persist the current snapshot for the next stable release diff."""
     is_prerelease = env_flag('IS_PRERELEASE', default=False)
     if not is_prerelease:
         lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
+
+
+def build_release_lines(previous_meta, current_meta):
+    """Render the markdown lines for the release body."""
+    susfs_label = current_meta.get('_build', {}).get('susfs', get_susfs_label())
+    kpn_label = current_meta.get('_build', {}).get('kpn', get_kpn_label())
+    lines = [f'## 构建选项', '', f'- SUSFS: {susfs_label}', f'- KP-N: {kpn_label}', '', '## 源码变更', '']
+    append_common_section(lines, current_meta, previous_meta)
+    append_ak3_section(lines, current_meta, previous_meta)
+    append_manager_section(lines, current_meta, previous_meta)
+    append_hidden_meta(lines, current_meta)
     return lines
 
 
