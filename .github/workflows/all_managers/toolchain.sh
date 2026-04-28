@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Shared toolchain helpers for all workflows. Keep version-to-path mapping,
+# download/install logic, and version label parsing in one place.
+
+# Return the root directory for a selected clang toolchain under a workspace.
 toolchain_dir() {
   local clang_version="$1"
   local root_dir="$2"
@@ -14,18 +18,21 @@ toolchain_dir() {
   esac
 }
 
+# Return the bin directory for the selected toolchain.
 toolchain_bin_dir() {
   local clang_version="$1"
   local root_dir="$2"
   printf '%s/bin' "$(toolchain_dir "$clang_version" "$root_dir")"
 }
 
+# Return the clang binary path for the selected toolchain.
 toolchain_clang_bin() {
   local clang_version="$1"
   local root_dir="$2"
   printf '%s/clang' "$(toolchain_bin_dir "$clang_version" "$root_dir")"
 }
 
+# Parse a readable clang version label from `clang -v`.
 clang_version_label() {
   local clang_bin="$1"
   local fallback_version="$2"
@@ -39,6 +46,7 @@ clang_version_label() {
   fi
 }
 
+# LLVM 23 comes from apt.llvm.org; cache a workspace copy after install.
 ensure_llvm23_toolchain() {
   local root_dir="$1"
   local clang_root
@@ -58,6 +66,7 @@ ensure_llvm23_toolchain() {
   cp -a /usr/lib/llvm-23 "$clang_root"
 }
 
+# Android clang14 uses the official Android prebuilts archive.
 ensure_android_clang14_toolchain() {
   local root_dir="$1"
   local clang_root
@@ -70,6 +79,7 @@ ensure_android_clang14_toolchain() {
   curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-release/clang-r450784d.tar.gz" | tar -xz -C "$clang_root"
 }
 
+# LLVM 22 continues to use the upstream release tarball.
 ensure_llvm22_toolchain() {
   local root_dir="$1"
   local clang_root parent_dir
@@ -89,6 +99,7 @@ ensure_llvm22_toolchain() {
   )
 }
 
+# Ensure the requested toolchain exists in the workspace cache.
 ensure_toolchain() {
   local clang_version="$1"
   local root_dir="$2"

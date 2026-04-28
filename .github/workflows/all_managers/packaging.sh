@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Shared AnyKernel3 packaging helpers. These keep branch selection, extra asset
+# downloads, and final zip naming consistent between local test and matrix jobs.
+
+# Map workflow manager names to the final package label.
 manager_type_name() {
   local manager="$1"
   local none_label="${2:-noksu}"
@@ -14,6 +18,7 @@ manager_type_name() {
   esac
 }
 
+# Prepare the AnyKernel3 tree and inject any manager-specific assets.
 prepare_anykernel_tree() {
   local manager="$1"
   local use_kpn="$2"
@@ -47,6 +52,7 @@ prepare_anykernel_tree() {
   rm -rf ./AnyKernel3/module/Corona
 }
 
+# Copy the built Image into AnyKernel3 and emit the final zip name.
 package_anykernel_zip() {
   local manager="$1"
   local kernel_version="$2"
