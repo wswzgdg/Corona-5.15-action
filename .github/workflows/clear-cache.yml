@@ -11,6 +11,7 @@ on:
         options:
           - 'ccache'
           - 'repo'
+          - 'clang14'
           - 'clang22'
           - 'clang23'
           - 'custom'
@@ -56,6 +57,9 @@ jobs:
               ;;
             repo)
               PREFIXES="repo-${RUNNER_OS}-${REF_NAME}"
+              ;;
+            clang14)
+              PREFIXES="clang14-android-r450784d-${RUNNER_OS}"
               ;;
             clang22)
               PREFIXES="clang22-llvm-22.1.0-${RUNNER_OS}"

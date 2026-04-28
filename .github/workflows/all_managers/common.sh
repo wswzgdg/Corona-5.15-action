@@ -24,6 +24,8 @@ fi
 export PATH="/usr/lib/ccache:$PATH"
 if [ "$LLVM_CLANG_VERSION" = "23" ]; then
   export PATH="/usr/lib/llvm-23/bin:$PATH"
+elif [ "$LLVM_CLANG_VERSION" = "14" ]; then
+  export PATH="$WORKDIR/clang14/clang-r450784d/bin:$PATH"
 else
   export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
 fi
@@ -75,7 +77,14 @@ git clone --depth=1 "$COMMON_URL" -b android13-5.15-lts common
 cd ../
 
 # toolchain (reuse to save space)
-if [ "$LLVM_CLANG_VERSION" != "23" ]; then
+if [ "$LLVM_CLANG_VERSION" = "14" ]; then
+  mkdir -p "$WORKDIR/clang14/clang-r450784d"
+  if [ ! -x "$WORKDIR/clang14/clang-r450784d/bin/clang" ]; then
+    cd "$WORKDIR/clang14/clang-r450784d"
+    curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-release/clang-r450784d.tar.gz" | tar -xz
+    cd "$WORKDIR/kernel_workspace"
+  fi
+elif [ "$LLVM_CLANG_VERSION" != "23" ]; then
   mkdir -p "$WORKDIR/clang22"
   # 本地没有 clang22 工具链时才下载，已有缓存就直接复用
   if [ ! -d "$WORKDIR/clang22/LLVM-22.1.0-Linux-X64" ]; then

@@ -76,6 +76,16 @@ jobs:
           restore-keys: |
             clang22-llvm-22.1.0-${{ runner.os }}
 
+      - name: 载入 clang14 缓存
+        if: ${{ inputs.clang_version == '14' }}
+        uses: actions/cache/restore@v5
+        id: clang14-restore
+        with:
+          path: ${{ github.workspace }}/clang14
+          key: clang14-android-r450784d-${{ runner.os }}
+          restore-keys: |
+            clang14-android-r450784d-${{ runner.os }}
+
       - name: 载入 clang23 缓存
         if: ${{ inputs.clang_version == '23' }}
         uses: actions/cache/restore@v5
@@ -230,6 +240,14 @@ jobs:
           path: /usr/lib/llvm-23
           key: clang23-apt-${{ runner.os }}
 
+      - name: 保存 clang14 缓存
+        if: ${{ always() && inputs.clang_version == '14' && steps.clang14-restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/clang14
+          key: clang14-android-r450784d-${{ runner.os }}
+
       - name: 记录 clang 版本元数据
         if: ${{ always() }}
         env:
@@ -238,6 +256,8 @@ jobs:
           mkdir -p "${{ github.workspace }}/clang_meta"
           if [ "$CLANG_VERSION_INPUT" = "23" ]; then
             CLANG_BIN="/usr/lib/llvm-23/bin/clang"
+          elif [ "$CLANG_VERSION_INPUT" = "14" ]; then
+            CLANG_BIN="${{ github.workspace }}/clang14/clang-r450784d/bin/clang"
           else
             CLANG_BIN="${{ github.workspace }}/clang22/LLVM-22.1.0-Linux-X64/bin/clang"
           fi
