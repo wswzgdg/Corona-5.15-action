@@ -172,6 +172,7 @@ jobs:
         env:
           CLANG_VERSION: ${{ inputs.clang_version }}
         run: |
+          source .github/workflows/all_managers/toolchain.sh
           sudo apt update -y
           sudo apt install -y --no-install-recommends \
             ccache flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3 \
@@ -179,17 +180,7 @@ jobs:
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
             tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386 \
             repo
-          if [ "$CLANG_VERSION" = "23" ] && [ ! -x "${{ github.workspace }}/clang23/llvm-23/bin/clang" ]; then
-            . /etc/os-release
-            LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
-            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
-            sudo apt update -y
-            sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
-            mkdir -p "${{ github.workspace }}/clang23"
-            rm -rf "${{ github.workspace }}/clang23/llvm-23"
-            cp -a /usr/lib/llvm-23 "${{ github.workspace }}/clang23/llvm-23"
-          fi
+          ensure_toolchain "$CLANG_VERSION" "${{ github.workspace }}"
 
       - name: 安装 ccache ECS
         run: |

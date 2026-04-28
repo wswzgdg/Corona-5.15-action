@@ -10,6 +10,9 @@ VERSION_NAME_RAW="${5:-eternitylonely}"
 LLVM_CLANG_VERSION="${CLANG_VERSION:-22}"
 WORKDIR="$(pwd)"
 
+source "$WORKDIR/.github/workflows/all_managers/toolchain.sh"
+source "$WORKDIR/.github/workflows/all_managers/packaging.sh"
+
 version_name_with_author() {
   local raw_name="${1:-eternitylonely}"
   printf '%s@Bai' "$raw_name"
@@ -22,13 +25,7 @@ if [ -n "$VERSION_NAME_TRIMMED" ]; then
 fi
 
 export PATH="/usr/lib/ccache:$PATH"
-if [ "$LLVM_CLANG_VERSION" = "23" ]; then
-  export PATH="$WORKDIR/clang23/llvm-23/bin:$PATH"
-elif [ "$LLVM_CLANG_VERSION" = "14" ]; then
-  export PATH="$WORKDIR/clang14/clang-r450784d/bin:$PATH"
-else
-  export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
-fi
+export PATH="$(toolchain_bin_dir "$LLVM_CLANG_VERSION" "$WORKDIR"):$PATH"
 
 mkdir -p kernel_workspace
 cd kernel_workspace
@@ -41,17 +38,7 @@ if [ -z "${SKIP_APT:-}" ]; then
   sudo apt update -y
   sudo apt-get install -y --no-install-recommends     binutils python-is-python3 libssl-dev libelf-dev ccache repo
   sudo apt-get install -y     flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3     make cmake zip aria2 gnupg gawk rsync     binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf     tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386
-  if [ "$LLVM_CLANG_VERSION" = "23" ] && [ ! -x "$WORKDIR/clang23/llvm-23/bin/clang" ]; then
-    . /etc/os-release
-    LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
-    wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
-    sudo apt update -y
-    sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
-    mkdir -p "$WORKDIR/clang23"
-    rm -rf "$WORKDIR/clang23/llvm-23"
-    cp -a /usr/lib/llvm-23 "$WORKDIR/clang23/llvm-23"
-  fi
+  ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
 fi
 
 if [ ! -d .repo ]; then
@@ -80,24 +67,7 @@ git clone --depth=1 "$COMMON_URL" -b android13-5.15-lts common
 cd ../
 
 # toolchain (reuse to save space)
-if [ "$LLVM_CLANG_VERSION" = "14" ]; then
-  mkdir -p "$WORKDIR/clang14/clang-r450784d"
-  if [ ! -x "$WORKDIR/clang14/clang-r450784d/bin/clang" ]; then
-    cd "$WORKDIR/clang14/clang-r450784d"
-    curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-release/clang-r450784d.tar.gz" | tar -xz
-    cd "$WORKDIR/kernel_workspace"
-  fi
-elif [ "$LLVM_CLANG_VERSION" != "23" ]; then
-  mkdir -p "$WORKDIR/clang22"
-  # 本地没有 clang22 工具链时才下载，已有缓存就直接复用
-  if [ ! -d "$WORKDIR/clang22/LLVM-22.1.0-Linux-X64" ]; then
-    cd "$WORKDIR/clang22"
-    aria2c -s16 -x16 -k1M https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz -o clang.tar.xz
-    tar -xvf clang.tar.xz -C ./
-    rm -rf clang.tar.xz
-    cd "$WORKDIR/kernel_workspace"
-  fi
-fi
+ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
 
 # prep common
 cd kernel_platform
@@ -224,45 +194,9 @@ AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
 if [ -n "${AK3_TOKEN:-}" ]; then
   AK3_URL="https://${AK3_TOKEN}@github.com/Corona-oplus-kernel/AnyKernel3"
 fi
-# KP-N 走独立的 AnyKernel3 分支；SukiSU / ReSukiSU 默认继续使用带 KPM 的打包分支
-if [ "$USE_KPN" = "true" ] && [ "$MANAGER" != "none" ]; then
-  git clone -b kp-n "$AK3_URL" --depth=1 AnyKernel3
-  mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
-  curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-android -o ./AnyKernel3/patch/kptools
-  curl -fL https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/kpimg -o ./AnyKernel3/patch/kpimg
-  curl -fL https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip -o ./AnyKernel3/module/kpn.zip
-elif [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
-  git clone -b kpm "$AK3_URL" --depth=1 AnyKernel3
-  mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
-  PATCH_URL=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
-  [ -n "$PATCH_URL" ] || { echo "未找到 patch_android release 资源"; exit 1; }
-  curl -fL "$PATCH_URL" -o ./AnyKernel3/patch/patch
-else
-  git clone -b main "$AK3_URL" --depth=1 AnyKernel3
-  mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
-fi
-rm -rf ./AnyKernel3/.git
-rm -f ./AnyKernel3/module/Corona.zip
 CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
-git clone "$CORONA_URL" --depth=1 AnyKernel3/module/Corona
-rm -rf ./AnyKernel3/module/Corona/.git
-rm -f ./AnyKernel3/module/Corona/LICENSE ./AnyKernel3/module/Corona/README.md
-(cd ./AnyKernel3/module/Corona && zip -r ../Corona.zip ./*)
-rm -rf ./AnyKernel3/module/Corona
-cp -f ./common/out/arch/arm64/boot/Image ./AnyKernel3/Image/Image
-
-case "$MANAGER" in
-  sukisu) KSU_TYPENAME="SukiSU";;
-  resukisu) KSU_TYPENAME="ReSukiSU";;
-  ksunext) KSU_TYPENAME="KSUNext";;
-  ksu) KSU_TYPENAME="KSU";;
-  kowsu) KSU_TYPENAME="KowSU";;
-  none) KSU_TYPENAME="noksu";;
-  *) KSU_TYPENAME="$MANAGER";;
- esac
-
-AK3_NAME=AK3-${KERNEL_VERSION}-${KSU_TYPENAME}@bai.zip
+prepare_anykernel_tree "$MANAGER" "$USE_KPN" "$AK3_URL" "$CORONA_URL"
 mkdir -p "$WORKDIR/out_zips"
-(cd AnyKernel3 && zip -r "$WORKDIR/out_zips/$AK3_NAME" ./*)
+package_anykernel_zip "$MANAGER" "$KERNEL_VERSION" "./common/out/arch/arm64/boot/Image" "$WORKDIR/out_zips" >/dev/null
 
 rm -rf AnyKernel3

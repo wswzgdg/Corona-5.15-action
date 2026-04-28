@@ -129,6 +129,7 @@ jobs:
           CLANG_VERSION: ${{ github.event.inputs.clang_version }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
         run: |
+          source .github/workflows/all_managers/toolchain.sh
           rm -rf kernel_workspace
           mkdir kernel_workspace
           cd kernel_workspace 
@@ -160,17 +161,7 @@ jobs:
           libc6-dev-i386 \
           ccache \
           repo
-          if [ "$CLANG_VERSION" = "23" ] && [ ! -x "${PWD}/clang23/llvm-23/bin/clang" ]; then
-            . /etc/os-release
-            LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
-            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
-            sudo apt update -y
-            sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
-            mkdir -p clang23
-            rm -rf clang23/llvm-23
-            cp -a /usr/lib/llvm-23 clang23/llvm-23
-          fi
+          ensure_toolchain "$CLANG_VERSION" "$PWD"
           echo "正在克隆源码仓库..."
 
           repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m oneplus_ace3_b.xml --no-tags --depth=1
@@ -188,20 +179,6 @@ jobs:
           fi
           git clone --depth=1 "$COMMON_URL" -b android13-5.15-lts common
           cd ../
-          if [ "$CLANG_VERSION" = "22" ]; then
-            echo "正在克隆llvm-Clang22工具链..."
-            mkdir -p clang22
-            aria2c -s16 -x16 -k1M https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz -o clang.tar.xz
-            tar -xvaf clang.tar.xz -C ./
-            mv LLVM-22.1.0-Linux-X64 clang22
-            rm -rf clang.tar.xz
-          elif [ "$CLANG_VERSION" = "14" ]; then
-            echo "正在拉取 Android 官方 clang14 工具链..."
-            mkdir -p clang14/clang-r450784d
-            if [ ! -x "clang14/clang-r450784d/bin/clang" ]; then
-              curl -fsSL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-release/clang-r450784d.tar.gz" | tar -xz -C clang14/clang-r450784d
-            fi
-          fi
 
           ########
           #if [ ! -f "clang22/bin/clang" ] || [ ! -f "clang22/bin/ld.lld" ]; then
@@ -444,18 +421,11 @@ jobs:
         env:
           CLANG_VERSION: ${{ github.event.inputs.clang_version }}
         run: |
+          source .github/workflows/all_managers/toolchain.sh
           WORKDIR="$(pwd)"
           export PATH="/usr/lib/ccache:$PATH"
-          if [ "$CLANG_VERSION" = "23" ]; then
-            export PATH="$WORKDIR/kernel_workspace/clang23/llvm-23/bin:$PATH"
-            CLANG_DIR="$WORKDIR/kernel_workspace/clang23/llvm-23/bin"
-          elif [ "$CLANG_VERSION" = "14" ]; then
-            export PATH="$WORKDIR/kernel_workspace/clang14/clang-r450784d/bin:$PATH"
-            CLANG_DIR="$WORKDIR/kernel_workspace/clang14/clang-r450784d/bin"
-          else
-            export PATH="$WORKDIR/kernel_workspace/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
-            CLANG_DIR="$WORKDIR/kernel_workspace/clang22/LLVM-22.1.0-Linux-X64/bin"
-          fi
+          CLANG_DIR="$(toolchain_bin_dir "$CLANG_VERSION" "$WORKDIR/kernel_workspace")"
+          export PATH="$CLANG_DIR:$PATH"
           CLANG_VERSION="$($CLANG_DIR/clang --version | head -n 1)"
           LLD_VERSION="$($CLANG_DIR/ld.lld --version | head -n 1)"
           echo "编译器信息:"
@@ -520,6 +490,7 @@ jobs:
         env:
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
         run: |
+          source .github/workflows/all_managers/packaging.sh
           cd kernel_workspace
           cd kernel_platform
           if [ -n "$AK3_TOKEN" ]; then
@@ -527,49 +498,9 @@ jobs:
           else
             AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
           fi
-          if [[ "${{ github.event.inputs.use_kpn }}" == "true" && "${{ github.event.inputs.ksu_type }}" != "none" ]]; then
-            git clone -b kp-n "$AK3_URL" --depth=1
-            curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-android -o ./AnyKernel3/patch/kptools
-            curl -fL https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/kpimg -o ./AnyKernel3/patch/kpimg
-            curl -fL https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip -o ./AnyKernel3/module/kpn.zip
-          elif [[ "${{ github.event.inputs.use_kpn }}" != "true" && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
-            git clone -b kpm "$AK3_URL" --depth=1
-            PATCH_URL=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
-            [ -n "$PATCH_URL" ] || { echo "未找到 patch_android release 资源"; exit 1; }
-            curl -fL "$PATCH_URL" -o ./AnyKernel3/patch/patch
-          else
-            git clone -b main "$AK3_URL" --depth=1
-          fi
-          rm -rf ./AnyKernel3/.git
-          rm -f ./AnyKernel3/module/Corona.zip
           CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
-          git clone "$CORONA_URL" --depth=1 ./AnyKernel3/module/Corona
-          rm -rf ./AnyKernel3/module/Corona/.git
-          rm -f ./AnyKernel3/module/Corona/LICENSE ./AnyKernel3/module/Corona/README.md
-          (cd ./AnyKernel3/module/Corona && zip -r ../Corona.zip ./*)
-          rm -rf ./AnyKernel3/module/Corona
-          cd AnyKernel3
-          # Image 目录已存在，直接替换
-          cp -f ../common/out/arch/arm64/boot/Image ./Image/Image
-          if [[ ! -f ./Image/Image ]]; then
-            echo "未找到内核镜像文件，构建可能出错"
-            exit 1
-          fi
-          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
-            KSU_TYPENAME="SukiSU"
-          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
-            KSU_TYPENAME="ReSukiSU"
-          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
-            KSU_TYPENAME="KSUNext"
-          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
-            KSU_TYPENAME="KSU"
-          elif [[ ${{ github.event.inputs.ksu_type }} == "kowsu" ]]; then
-            KSU_TYPENAME="KowSU"
-          else
-            KSU_TYPENAME="none"
-          fi
-          AK3_NAME=AK3-${{ env.KERNEL_VERSION }}-${KSU_TYPENAME}@Bai.zip
-          zip -r ../$AK3_NAME ./*
+          prepare_anykernel_tree "${{ github.event.inputs.ksu_type }}" "${{ github.event.inputs.use_kpn && 'true' || 'false' }}" "$AK3_URL" "$CORONA_URL"
+          AK3_NAME="$(package_anykernel_zip "${{ github.event.inputs.ksu_type }}" "${{ env.KERNEL_VERSION }}" "./common/out/arch/arm64/boot/Image" ".." "none")"
           echo "ak3name=$AK3_NAME" >> $GITHUB_OUTPUT
 
       - name: 上传 ZIP 工件
