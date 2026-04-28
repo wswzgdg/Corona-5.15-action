@@ -53,6 +53,14 @@ on:
         required: false
         type: string
         default: "eternitylonely"
+      clang_version:
+        description: "LLVM/Clang 版本"
+        required: false
+        type: choice
+        options:
+          - '22'
+          - '23'
+        default: '22'
       # 这里改的是内核自身的版本后缀，会影响 setlocalversion 生成出来的内核名
       kernel_suffix:
         description: "设置内核后缀"
@@ -87,6 +95,7 @@ jobs:
       ccache_update: ${{ inputs.ccache_update }}
       use_kpn: ${{ inputs.use_kpn }}
       version_name: ${{ inputs.version_name }}
+      clang_version: ${{ inputs.clang_version }}
       # 这里根据 workflow_dispatch 的勾选结果决定当前矩阵项是否真正执行
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
       allow_fail: true
@@ -106,6 +115,13 @@ jobs:
         with:
           path: ./release_zips
           pattern: ak3-*
+          merge-multiple: true
+
+      - name: 下载 clang 元数据工件
+        uses: actions/download-artifact@v8
+        with:
+          path: ./clang_meta
+          pattern: clang-meta-*
           merge-multiple: true
 
       - name: 记录成功发包的管理器
@@ -128,6 +144,18 @@ jobs:
           Path('successful_managers.json').write_text(
               json.dumps(sorted(set(success_managers)), ensure_ascii=False)
           )
+          clang_versions = []
+          for path in sorted(Path('clang_meta').glob('*.txt')):
+              value = path.read_text(encoding='utf-8').strip()
+              if value:
+                  clang_versions.append(value)
+          label = 'unknown'
+          versions = sorted(set(clang_versions))
+          if len(versions) == 1:
+              label = versions[0]
+          elif versions:
+              label = 'mixed'
+          Path('clang_version_label.txt').write_text(label)
           PYART
 
       # 读取最近一次稳定版的隐藏元数据，用于生成本次变更对比
@@ -589,9 +617,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: all-managers-${{ github.run_id }}
-          RELEASE_NAME: "${{ inputs.pre_release && format('预发布 | 全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') || format('全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') }}"
           PRERELEASE_FLAG: ${{ inputs.pre_release && '--prerelease' || '' }}
         run: |
+          CLANG_LABEL="$(cat ./clang_version_label.txt 2>/dev/null || printf 'unknown')"
+          RELEASE_NAME="${{ inputs.pre_release && format('预发布 | 全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') || format('全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') }} | clang:${CLANG_LABEL}"
           gh release create "$TAG_NAME" ./release_zips/*.zip \
             --repo "${{ github.repository }}" \
             --title "$RELEASE_NAME" \

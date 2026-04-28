@@ -12,6 +12,7 @@ on:
           - 'ccache'
           - 'repo'
           - 'clang22'
+          - 'clang23'
           - 'custom'
       ref_name:
         description: '分支名；用于 ccache/repo 前缀拼接'
@@ -57,6 +58,9 @@ jobs:
               ;;
             clang22)
               PREFIX="clang22-llvm-22.1.0-${RUNNER_OS}"
+              ;;
+            clang23)
+              PREFIX="clang23-apt-${RUNNER_OS}"
               ;;
             custom)
               PREFIX="${CUSTOM_PREFIX}"

@@ -31,6 +31,11 @@ on:
         required: false
         type: string
         default: 'eternitylonely'
+      clang_version:
+        description: 'LLVM/Clang 版本'
+        required: false
+        type: string
+        default: '22'
       build_enabled:
         description: '是否执行该 manager'
         required: false
@@ -63,12 +68,23 @@ jobs:
           mkdir -p $HOME/.ccache_5.15
 
       - name: 载入 clang22 缓存
+        if: ${{ inputs.clang_version == '22' }}
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/clang22
           key: clang22-llvm-22.1.0-${{ runner.os }}
           restore-keys: |
             clang22-llvm-22.1.0-${{ runner.os }}
+
+      - name: 载入 clang23 缓存
+        if: ${{ inputs.clang_version == '23' }}
+        uses: actions/cache/restore@v5
+        id: clang23-restore
+        with:
+          path: /usr/lib/llvm-23
+          key: clang23-apt-${{ runner.os }}
+          restore-keys: |
+            clang23-apt-${{ runner.os }}
 
       - name: 载入 repo 缓存
         uses: actions/cache/restore@v5
@@ -143,6 +159,8 @@ jobs:
          echo "当前根分区可用空间：$(df -B GB / | grep / | awk '{print $4}')"
 
       - name: 安装环境依赖
+        env:
+          CLANG_VERSION: ${{ inputs.clang_version }}
         run: |
           sudo apt update -y
           sudo apt install -y --no-install-recommends \
@@ -151,6 +169,14 @@ jobs:
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
             tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386 \
             repo
+          if [ "$CLANG_VERSION" = "23" ] && [ ! -x /usr/lib/llvm-23/bin/clang ]; then
+            . /etc/os-release
+            LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+            echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME}-23 main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+            sudo apt update -y
+            sudo apt install -y --no-install-recommends clang-23 lld-23
+          fi
 
       - name: 安装 ccache ECS
         run: |
@@ -169,6 +195,7 @@ jobs:
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
           ANDROID_VERSION: android13
           KERNEL_VERSION: '5.15'
+          CLANG_VERSION: ${{ inputs.clang_version }}
           SKIP_APT: '1'
         run: |
           chmod +x .github/workflows/all_managers/common.sh
@@ -194,6 +221,30 @@ jobs:
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+
+      - name: 保存 clang23 缓存
+        if: ${{ always() && inputs.clang_version == '23' && steps.clang23-restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: /usr/lib/llvm-23
+          key: clang23-apt-${{ runner.os }}
+
+      - name: 记录 clang 版本元数据
+        if: ${{ always() }}
+        env:
+          CLANG_VERSION_INPUT: ${{ inputs.clang_version }}
+        run: |
+          mkdir -p "${{ github.workspace }}/clang_meta"
+          if [ "$CLANG_VERSION_INPUT" = "23" ]; then
+            CLANG_BIN="/usr/lib/llvm-23/bin/clang"
+          else
+            CLANG_BIN="${{ github.workspace }}/clang22/LLVM-22.1.0-Linux-X64/bin/clang"
+          fi
+          CLANG_LABEL_RAW="$($CLANG_BIN -v 2>&1 | grep 'clang version' | head -n 1)"
+          CLANG_LABEL_VERSION="$(printf '%s' "$CLANG_LABEL_RAW" | grep -oE '[0-9]+(\.[0-9]+){0,2}' | head -n 1)"
+          [ -n "$CLANG_LABEL_VERSION" ] || CLANG_LABEL_VERSION="$CLANG_VERSION_INPUT"
+          printf '%s' "$CLANG_LABEL_VERSION" > "${{ github.workspace }}/clang_meta/${{ inputs.manager }}.txt"
 
       - name: 覆盖同 key 的 repo 缓存
         if: ${{ always() }}
@@ -221,3 +272,10 @@ jobs:
         with:
           name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
+
+      - name: 上传 clang 元数据工件
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('clang-meta-{0}', inputs.manager) }}
+          path: ${{ github.workspace }}/clang_meta/${{ inputs.manager }}.txt

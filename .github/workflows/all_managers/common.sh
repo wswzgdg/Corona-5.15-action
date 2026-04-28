@@ -7,6 +7,7 @@ KERNEL_SUFFIX="${2:-}"
 SUSFS_MODE="${3:-on}"
 USE_KPN="${4:-false}"
 VERSION_NAME_RAW="${5:-eternitylonely}"
+LLVM_CLANG_VERSION="${CLANG_VERSION:-22}"
 WORKDIR="$(pwd)"
 
 version_name_with_author() {
@@ -21,7 +22,11 @@ if [ -n "$VERSION_NAME_TRIMMED" ]; then
 fi
 
 export PATH="/usr/lib/ccache:$PATH"
-export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
+if [ "$LLVM_CLANG_VERSION" = "23" ]; then
+  export PATH="/usr/lib/llvm-23/bin:$PATH"
+else
+  export PATH="$WORKDIR/clang22/LLVM-22.1.0-Linux-X64/bin:$PATH"
+fi
 
 mkdir -p kernel_workspace
 cd kernel_workspace
@@ -34,6 +39,14 @@ if [ -z "${SKIP_APT:-}" ]; then
   sudo apt update -y
   sudo apt-get install -y --no-install-recommends     binutils python-is-python3 libssl-dev libelf-dev ccache repo
   sudo apt-get install -y     flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3     make cmake zip aria2 gnupg gawk rsync     binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf     tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386
+  if [ "$LLVM_CLANG_VERSION" = "23" ]; then
+    . /etc/os-release
+    LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+    wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME}-23 main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+    sudo apt update -y
+    sudo apt install -y --no-install-recommends clang-23 lld-23
+  fi
 fi
 
 if [ ! -d .repo ]; then
@@ -62,14 +75,16 @@ git clone --depth=1 "$COMMON_URL" -b android13-5.15-lts common
 cd ../
 
 # toolchain (reuse to save space)
-mkdir -p "$WORKDIR/clang22"
-# 本地没有 clang22 工具链时才下载，已有缓存就直接复用
-if [ ! -d "$WORKDIR/clang22/LLVM-22.1.0-Linux-X64" ]; then
-  cd "$WORKDIR/clang22"
-  aria2c -s16 -x16 -k1M https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz -o clang.tar.xz
-  tar -xvf clang.tar.xz -C ./
-  rm -rf clang.tar.xz
-  cd "$WORKDIR/kernel_workspace"
+if [ "$LLVM_CLANG_VERSION" != "23" ]; then
+  mkdir -p "$WORKDIR/clang22"
+  # 本地没有 clang22 工具链时才下载，已有缓存就直接复用
+  if [ ! -d "$WORKDIR/clang22/LLVM-22.1.0-Linux-X64" ]; then
+    cd "$WORKDIR/clang22"
+    aria2c -s16 -x16 -k1M https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz -o clang.tar.xz
+    tar -xvf clang.tar.xz -C ./
+    rm -rf clang.tar.xz
+    cd "$WORKDIR/kernel_workspace"
+  fi
 fi
 
 # prep common
