@@ -91,7 +91,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: clang23-restore
         with:
-          path: /usr/lib/llvm-23
+          path: ${{ github.workspace }}/clang23
           key: clang23-apt-${{ runner.os }}
           restore-keys: |
             clang23-apt-${{ runner.os }}
@@ -179,13 +179,16 @@ jobs:
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
             tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386 \
             repo
-          if [ "$CLANG_VERSION" = "23" ] && [ ! -x /usr/lib/llvm-23/bin/clang ]; then
+          if [ "$CLANG_VERSION" = "23" ] && [ ! -x "${{ github.workspace }}/clang23/llvm-23/bin/clang" ]; then
             . /etc/os-release
             LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
             wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
             echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
             sudo apt update -y
             sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
+            mkdir -p "${{ github.workspace }}/clang23"
+            rm -rf "${{ github.workspace }}/clang23/llvm-23"
+            cp -a /usr/lib/llvm-23 "${{ github.workspace }}/clang23/llvm-23"
           fi
 
       - name: 安装 ccache ECS
@@ -237,7 +240,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
-          path: /usr/lib/llvm-23
+          path: ${{ github.workspace }}/clang23
           key: clang23-apt-${{ runner.os }}
 
       - name: 保存 clang14 缓存
@@ -255,7 +258,7 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/clang_meta"
           if [ "$CLANG_VERSION_INPUT" = "23" ]; then
-            CLANG_BIN="/usr/lib/llvm-23/bin/clang"
+            CLANG_BIN="${{ github.workspace }}/clang23/llvm-23/bin/clang"
           elif [ "$CLANG_VERSION_INPUT" = "14" ]; then
             CLANG_BIN="${{ github.workspace }}/clang14/clang-r450784d/bin/clang"
           else

@@ -119,7 +119,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: clang23-restore
         with:
-          path: /usr/lib/llvm-23
+          path: ${{ github.workspace }}/kernel_workspace/clang23
           key: clang23-apt-${{ runner.os }}
           restore-keys: |
             clang23-apt-${{ runner.os }}
@@ -160,13 +160,16 @@ jobs:
           libc6-dev-i386 \
           ccache \
           repo
-          if [ "$CLANG_VERSION" = "23" ] && [ ! -x /usr/lib/llvm-23/bin/clang ]; then
+          if [ "$CLANG_VERSION" = "23" ] && [ ! -x "${PWD}/clang23/llvm-23/bin/clang" ]; then
             . /etc/os-release
             LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
             wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
             echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
             sudo apt update -y
             sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
+            mkdir -p clang23
+            rm -rf clang23/llvm-23
+            cp -a /usr/lib/llvm-23 clang23/llvm-23
           fi
           echo "正在克隆源码仓库..."
 
@@ -444,8 +447,8 @@ jobs:
           WORKDIR="$(pwd)"
           export PATH="/usr/lib/ccache:$PATH"
           if [ "$CLANG_VERSION" = "23" ]; then
-            export PATH="/usr/lib/llvm-23/bin:$PATH"
-            CLANG_DIR="/usr/lib/llvm-23/bin"
+            export PATH="$WORKDIR/kernel_workspace/clang23/llvm-23/bin:$PATH"
+            CLANG_DIR="$WORKDIR/kernel_workspace/clang23/llvm-23/bin"
           elif [ "$CLANG_VERSION" = "14" ]; then
             export PATH="$WORKDIR/kernel_workspace/clang14/clang-r450784d/bin:$PATH"
             CLANG_DIR="$WORKDIR/kernel_workspace/clang14/clang-r450784d/bin"
@@ -509,7 +512,7 @@ jobs:
         if: ${{ github.event.inputs.clang_version == '23' && steps.clang23-restore.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v5
         with:
-          path: /usr/lib/llvm-23
+          path: ${{ github.workspace }}/kernel_workspace/clang23
           key: clang23-apt-${{ runner.os }}
          
       - name: 克隆 AnyKernel3 并打包

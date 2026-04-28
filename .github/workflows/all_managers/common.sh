@@ -23,7 +23,7 @@ fi
 
 export PATH="/usr/lib/ccache:$PATH"
 if [ "$LLVM_CLANG_VERSION" = "23" ]; then
-  export PATH="/usr/lib/llvm-23/bin:$PATH"
+  export PATH="$WORKDIR/clang23/llvm-23/bin:$PATH"
 elif [ "$LLVM_CLANG_VERSION" = "14" ]; then
   export PATH="$WORKDIR/clang14/clang-r450784d/bin:$PATH"
 else
@@ -41,13 +41,16 @@ if [ -z "${SKIP_APT:-}" ]; then
   sudo apt update -y
   sudo apt-get install -y --no-install-recommends     binutils python-is-python3 libssl-dev libelf-dev ccache repo
   sudo apt-get install -y     flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3     make cmake zip aria2 gnupg gawk rsync     binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf     tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386
-  if [ "$LLVM_CLANG_VERSION" = "23" ]; then
+  if [ "$LLVM_CLANG_VERSION" = "23" ] && [ ! -x "$WORKDIR/clang23/llvm-23/bin/clang" ]; then
     . /etc/os-release
     LLVM_APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
     echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/${LLVM_APT_CODENAME}/ llvm-toolchain-${LLVM_APT_CODENAME} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
     sudo apt update -y
     sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
+    mkdir -p "$WORKDIR/clang23"
+    rm -rf "$WORKDIR/clang23/llvm-23"
+    cp -a /usr/lib/llvm-23 "$WORKDIR/clang23/llvm-23"
   fi
 fi
 
