@@ -125,7 +125,18 @@ jobs:
           pattern: clang-meta-*
           merge-multiple: true
 
+      - name: 检查是否存在 ZIP 产物
+        id: release_zips_check
+        run: |
+          if compgen -G "release_zips/AK3-*.zip" > /dev/null; then
+            echo "has_zips=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "未找到可发布的 ZIP 产物，跳过 release 阶段。"
+            echo "has_zips=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 记录成功发包的管理器
+        if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         run: |
           python3 - <<'PYART'
           import json
@@ -161,6 +172,7 @@ jobs:
 
       # 读取最近一次稳定版的隐藏元数据，用于生成本次变更对比
       - name: 获取上一版发布元数据
+        if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         id: previous_release
         uses: actions/github-script@v8
         with:
@@ -186,6 +198,7 @@ jobs:
             }
 
       - name: 生成发布描述
+        if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         env:
           PREVIOUS_RELEASE_BODY_B64: ${{ steps.previous_release.outputs.body_b64 }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
@@ -615,6 +628,7 @@ jobs:
           PYBODY
 
       - name: 发布 ZIP 包
+        if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: all-managers-${{ github.run_id }}
