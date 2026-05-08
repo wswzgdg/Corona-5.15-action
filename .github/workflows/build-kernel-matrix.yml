@@ -52,7 +52,7 @@ on:
         description: "KSU 版本名主体"
         required: false
         type: string
-        default: "eternitylonely"
+        default: "SEX"
       clang_version:
         description: "LLVM/Clang 版本"
         required: false
