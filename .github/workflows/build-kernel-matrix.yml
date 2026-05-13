@@ -1,5 +1,9 @@
 name: 全量构建内核
 
+env:
+  TZ: Asia/Shanghai
+  CCACHE_KEY: ccache-ecsv3-5.15
+
 on:
   workflow_dispatch:
     inputs:
@@ -94,6 +98,7 @@ jobs:
       kernel_suffix: ${{ inputs.kernel_suffix }}
       susfs: ${{ inputs.build_susfs }}
       ccache_update: ${{ inputs.ccache_update }}
+      ccache_key: ${{ env.CCACHE_KEY }}
       use_kpn: ${{ inputs.use_kpn }}
       version_name: ${{ inputs.version_name }}
       clang_version: ${{ inputs.clang_version }}
@@ -141,10 +146,8 @@ jobs:
       - name: 记录成功发包的管理器
         if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         run: |
-          # 共享脚本负责汇总成功管理器和 clang 标签，避免把 Python 塞进 YAML。
           python3 .github/workflows/all_managers/release_metadata.py collect-artifacts
 
-      # 读取最近一次稳定版的隐藏元数据，用于生成本次变更对比
       - name: 获取上一版发布元数据
         if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         id: previous_release
@@ -186,7 +189,6 @@ jobs:
           BUILD_SUSFS: ${{ inputs.build_susfs }}
           BUILD_USE_KPN: ${{ inputs.use_kpn }}
         run: |
-          # 共享脚本读取上一版隐藏元数据，并生成当前 release body。
           python3 .github/workflows/all_managers/release_metadata.py generate-release-body
 
       - name: 发布 ZIP 包

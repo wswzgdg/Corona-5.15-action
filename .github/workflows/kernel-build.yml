@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: false
+      ccache_key:
+        description: 'ccache 缓存键前缀'
+        required: false
+        type: string
+        default: 'ccache-ecsv3-5.15'
       use_kpn:
         description: '是否在编译后使用 KP-N patch 内核镜像'
         required: false
@@ -110,11 +115,11 @@ jobs:
         id: ccache-restore
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+          key: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
           restore-keys: |
-            ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
-            ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-
-            ccache-5.15-${{ runner.os }}-
+            ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+            ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-
+            ${{ inputs.ccache_key }}-${{ runner.os }}-
 
       - name: 拉取公共预置 ccache 缓存
         env:
@@ -190,8 +195,15 @@ jobs:
 
       - name: 初始化 ccache
         run: |
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_NOHARDLINK="true"
           ccache -M ${{ env.CCACHE_MAXSIZE }}
           ccache -o compression=true
+          echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
+          echo "ccache初始状态:"
+          ccache -s
 
       - name: 编译内核
         env:
@@ -201,16 +213,27 @@ jobs:
           KERNEL_VERSION: '5.15'
           CLANG_VERSION: ${{ inputs.clang_version }}
           SKIP_APT: '1'
+          CCACHE_LOGFILE: ${{ github.workspace }}/kernel_workspace/ccache.log
+          CCACHE_COMPILERCHECK: none
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_NOHASHDIR: true
+          CCACHE_NOHARDLINK: true
+          CCACHE_IS_KERNEL_COMPILING: true
         run: |
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          mkdir -p "$(dirname "$CCACHE_LOGFILE")"
+          echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
           chmod +x .github/workflows/all_managers/common.sh
           .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}" "${{ inputs.use_kpn && 'true' || 'false' }}" "${{ inputs.version_name }}"
+          echo "ccache状态："
+          ccache -s
 
       - name: 覆盖同 key 的 ccache 缓存
         if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+          CACHE_KEY: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
         run: |
           if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
             echo "已删除旧的 ccache 缓存: $CACHE_KEY"
@@ -224,7 +247,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-5.15-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+          key: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
 
       - name: 保存 clang23 缓存
         if: ${{ always() && inputs.clang_version == '23' && steps.clang23-restore.outputs.cache-hit != 'true' }}
