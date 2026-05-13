@@ -15,8 +15,6 @@
 
 所有管理器均集成 [SUSFS](https://gitlab.com/simonpunk/susfs4ksu) 内核补丁。
 
-``````
-
 ### 编译参数
 
 - **工具链**：LLVM/Clang 22.1.0
@@ -46,3 +44,7 @@
 ```
 
 欢迎使用github issues对本内核提出问题❛˓◞˂̵✧
+
+## 致谢
+
+- [cctv18](https://github.com/cctv18) — [ccache-ECS](https://github.com/cctv18/oppo_oplus_realme_sm8750) 特化内核编译缓存方案
