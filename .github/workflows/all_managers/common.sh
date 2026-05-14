@@ -84,7 +84,7 @@ cd common
 # 先接入选中的管理器，再按需要覆盖显示版本中的提交哈希
 case "$MANAGER" in
   sukisu)
-    curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s builtin
+    curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s main
     if [ -n "$VERSION_NAME_FULL" ] && [ -f "./KernelSU/kernel/Kbuild" ]; then
       sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-'"$VERSION_NAME_FULL"',v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
     fi
