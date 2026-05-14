@@ -32,11 +32,11 @@ mkdir -p kernel_workspace
 cd kernel_workspace
 # 未设置 SKIP_APT 时才安装依赖，方便在重复调用时跳过 apt 节省时间
 if [ -z "${SKIP_APT:-}" ]; then
-  sudo apt-mark hold firefox
-  sudo apt-mark hold libc-bin
-  sudo apt purge -y man-db
+  sudo apt-mark hold firefox 2>/dev/null
+  sudo apt-mark hold libc-bin 2>/dev/null
+  sudo apt-get purge -y man-db
   sudo rm -rf /var/lib/man-db/auto-update
-  sudo apt update -y
+  sudo apt-get update -y -qq
   sudo apt-get install -y --no-install-recommends     binutils python-is-python3 libssl-dev libelf-dev ccache repo
   sudo apt-get install -y     flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3     make cmake zip aria2 gnupg gawk rsync     binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf     tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386
   ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"

@@ -163,8 +163,8 @@ jobs:
          sudo rm -rf /usr/local/lib/node_modules || true
 
          # 清理 APT 缓存和日志
-         sudo apt clean
-         sudo apt autoclean
+         sudo apt-get clean -qq
+         sudo apt-get autoclean -qq
          sudo rm -rf /var/log/*.log
          sudo rm -rf /var/cache/apt/archives/*
 
@@ -184,8 +184,8 @@ jobs:
           CLANG_VERSION: ${{ inputs.clang_version }}
         run: |
           source .github/workflows/all_managers/toolchain.sh
-          sudo apt update -y
-          sudo apt install -y --no-install-recommends \
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq --no-install-recommends \
             ccache flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3 \
             make cmake zip aria2 gnupg gawk rsync \
             binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
