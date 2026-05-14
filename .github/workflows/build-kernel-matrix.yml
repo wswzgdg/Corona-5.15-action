@@ -42,6 +42,15 @@ on:
         required: true
         type: boolean
         default: true
+      droidspaces_enable:
+        description: "启用 Droidspaces 容器支持(false关闭/standard容器+ntsync/extend扩展支持(含EVDI DRM))"
+        required: true
+        type: choice
+        default: 'false'
+        options:
+          - 'false'
+          - 'standard'
+          - 'extend'
       ccache_update:
         description: "更新 ccache 缓存"
         required: false
@@ -97,6 +106,7 @@ jobs:
       # 内核后缀原样传下去，只影响内核名，不影响管理器显示版本
       kernel_suffix: ${{ inputs.kernel_suffix }}
       susfs: ${{ inputs.build_susfs }}
+      droidspaces_enable: ${{ inputs.droidspaces_enable }}
       ccache_update: ${{ inputs.ccache_update }}
       ccache_key: ${{ env.CCACHE_KEY }}
       use_kpn: ${{ inputs.use_kpn }}
@@ -187,6 +197,7 @@ jobs:
           BUILD_KOWSU: ${{ inputs.build_kowsu }}
           BUILD_NONE: ${{ inputs.build_none }}
           BUILD_SUSFS: ${{ inputs.build_susfs }}
+          BUILD_DROIDSPACES: ${{ inputs.droidspaces_enable }}
           BUILD_USE_KPN: ${{ inputs.use_kpn }}
         run: |
           python3 .github/workflows/all_managers/release_metadata.py generate-release-body

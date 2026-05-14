@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: true
+      droidspaces_enable:
+        description: '是否启用 Droidspaces 容器支持'
+        required: false
+        type: string
+        default: 'false'
       ccache_update:
         description: '是否覆盖更新 ccache 缓存'
         required: false
@@ -115,9 +120,10 @@ jobs:
         id: ccache-restore
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+          key: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}
           restore-keys: |
-            ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+            ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}
+            ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-
             ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-
             ${{ inputs.ccache_key }}-${{ runner.os }}-
 
@@ -205,6 +211,53 @@ jobs:
           echo "ccache初始状态:"
           ccache -s
 
+      - name: 启用 Droidspaces 容器支持
+        if: ${{ inputs.droidspaces_enable != 'false' }}
+        run: |
+          echo "正在启用 Droidspaces 容器支持..."
+          cd kernel_workspace/common
+          REPO_URL="https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/droidspaces_patch"
+          # 应用 OKI 5.15 Droidspaces 核心补丁
+          wget "$REPO_URL/01.disable_crc_checks_for_lkms.patch"
+          patch -p1 -F 3 < 01.disable_crc_checks_for_lkms.patch || true
+          wget "$REPO_URL/02.fix_restore_cgroup_file_prefix_handling.patch"
+          patch -p1 -F 3 < 02.fix_restore_cgroup_file_prefix_handling.patch || true
+          wget "$REPO_URL/03.5.15+_use_android_abi_padding_for_posix_mqueue.patch"
+          patch -p1 -F 3 < 03.5.15+_use_android_abi_padding_for_posix_mqueue.patch || true
+          wget "$REPO_URL/04.sysvipc_task_struct.patch"
+          patch -p1 -F 3 < 04.sysvipc_task_struct.patch || true
+          # 应用 NTSync 补丁
+          wget "$REPO_URL/ntsync_base.patch"
+          wget "$REPO_URL/ntsync_compat_android13-5.15.patch"
+          patch -p1 -F 3 < ntsync_base.patch || true
+          patch -p1 -F 3 < ntsync_compat_android13-5.15.patch || true
+          # 开启 Droidspaces 容器所需内核支持
+          echo "CONFIG_PID_NS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IPC_NS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_UTS_NS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_USER_NS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_SYSVIPC=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEVTMPFS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NAMESPACES=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_POSIX_MQUEUE=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NETFILTER_XT_MATCH_RECENT=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_CGROUP_DEVICE=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_CGROUP_PIDS=y" >> ./arch/arm64/configs/gki_defconfig
+          echo "CONFIG_MEMCG=y" >> ./arch/arm64/configs/gki_defconfig
+          # 开启 NTSync
+          echo "CONFIG_NTSYNC=y" >> ./arch/arm64/configs/gki_defconfig
+          if [[ "${{ inputs.droidspaces_enable }}" == "extend" ]]; then
+            echo "正在启用容器环境扩展支持..."
+            echo "CONFIG_BT_HCIVHCI=y" >> ./arch/arm64/configs/gki_defconfig
+            echo "CONFIG_STATIC_USERMODEHELPER=n" >> ./arch/arm64/configs/gki_defconfig
+            # 添加 Lindroid EVDI DRM 驱动
+            wget "$REPO_URL/evdi_drm.patch"
+            patch -p1 -F 3 < evdi_drm.patch || true
+            echo "CONFIG_DRM_LINDROID_EVDI=y" >> ./arch/arm64/configs/gki_defconfig
+          fi
+
       - name: 编译内核
         env:
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
@@ -233,7 +286,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+          CACHE_KEY: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}
         run: |
           if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
             echo "已删除旧的 ccache 缓存: $CACHE_KEY"
