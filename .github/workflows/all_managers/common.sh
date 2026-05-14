@@ -115,24 +115,24 @@ cd ..
 
 # SUSFS patch (skip none)
 # 只有启用了管理器且显式开启 SUSFS 时才打补丁；none 模式保持纯内核构建
-if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
+if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
   rm -rf susfs4ksu
   git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu susfs4ksu -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
   cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch ./common/
   cp ./susfs4ksu/kernel_patches/fs/* ./common/fs/
   cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
   cd ./common
-  patch -p1 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
+  patch -p1 -F 3 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
   cd ..
 fi
 
-# 只有原版 ksu 在启用 SUSFS 时需要额外补这份兼容补丁，其他分支不走这里
+# 启用 SUSFS 时补兼容补丁，暴露 fake_state/ksu_selinux_hide_running 符号
 if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
   # 目录存在才补，避免上游结构变化时直接报错退出
   if [ -d "./KernelSU" ]; then
     cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
     cd ./KernelSU
-    patch -p1 < 10_enable_susfs_for_ksu.patch || true
+    patch -p1 -F 3 < 10_enable_susfs_for_ksu.patch || true
     cd ..
   fi
 fi
