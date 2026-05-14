@@ -211,57 +211,13 @@ jobs:
           echo "ccache初始状态:"
           ccache -s
 
-      - name: 启用 Droidspaces 容器支持
-        if: ${{ inputs.droidspaces_enable != 'false' }}
-        run: |
-          echo "正在启用 Droidspaces 容器支持..."
-          cd kernel_workspace/common
-          REPO_URL="https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/droidspaces_patch"
-          # 应用 OKI 5.15 Droidspaces 核心补丁
-          wget "$REPO_URL/01.disable_crc_checks_for_lkms.patch"
-          patch -p1 -F 3 < 01.disable_crc_checks_for_lkms.patch || true
-          wget "$REPO_URL/02.fix_restore_cgroup_file_prefix_handling.patch"
-          patch -p1 -F 3 < 02.fix_restore_cgroup_file_prefix_handling.patch || true
-          wget "$REPO_URL/03.5.15+_use_android_abi_padding_for_posix_mqueue.patch"
-          patch -p1 -F 3 < 03.5.15+_use_android_abi_padding_for_posix_mqueue.patch || true
-          wget "$REPO_URL/04.sysvipc_task_struct.patch"
-          patch -p1 -F 3 < 04.sysvipc_task_struct.patch || true
-          # 应用 NTSync 补丁 (base 已在源码内置，仅保留文件不patch)
-          wget "$REPO_URL/ntsync_compat_android13-5.15.patch"
-          patch -p1 -F 3 < ntsync_compat_android13-5.15.patch || true
-          # 开启 Droidspaces 容器所需内核支持
-          echo "CONFIG_PID_NS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_IPC_NS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_UTS_NS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_USER_NS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_SYSVIPC=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEVTMPFS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NAMESPACES=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_POSIX_MQUEUE=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_NETFILTER_XT_MATCH_RECENT=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_CGROUP_DEVICE=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_CGROUP_PIDS=y" >> ./arch/arm64/configs/gki_defconfig
-          echo "CONFIG_MEMCG=y" >> ./arch/arm64/configs/gki_defconfig
-          # 开启 NTSync
-          echo "CONFIG_NTSYNC=y" >> ./arch/arm64/configs/gki_defconfig
-          if [[ "${{ inputs.droidspaces_enable }}" == "extend" ]]; then
-            echo "正在启用容器环境扩展支持..."
-            echo "CONFIG_BT_HCIVHCI=y" >> ./arch/arm64/configs/gki_defconfig
-            echo "CONFIG_STATIC_USERMODEHELPER=n" >> ./arch/arm64/configs/gki_defconfig
-            # 添加 Lindroid EVDI DRM 驱动
-            wget "$REPO_URL/evdi_drm.patch"
-            patch -p1 -F 3 < evdi_drm.patch || true
-            echo "CONFIG_DRM_LINDROID_EVDI=y" >> ./arch/arm64/configs/gki_defconfig
-          fi
-
       - name: 编译内核
         env:
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
           ANDROID_VERSION: android13
           KERNEL_VERSION: '5.15'
+          DROIDSPACES_ENABLE: ${{ inputs.droidspaces_enable }}
           CLANG_VERSION: ${{ inputs.clang_version }}
           SKIP_APT: '1'
           CCACHE_LOGFILE: ${{ github.workspace }}/kernel_workspace/ccache.log
