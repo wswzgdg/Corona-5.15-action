@@ -292,13 +292,17 @@ jobs:
             echo "旧的 ccache 缓存不存在，直接保存新缓存"
           fi
 
+      - name: 确保 ccache 目录存在
+        if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
+        run: mkdir -p "${{ env.CCACHE_DIR }}"
+
       - name: 保存 ccache 缓存
         if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}
+          key: ${{ inputs.ccache_key }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}
 
       - name: 保存 clang23 缓存
         if: ${{ always() && inputs.clang_version == '23' && steps.clang23-restore.outputs.cache-hit != 'true' }}
