@@ -6,7 +6,7 @@ index cea777ae7fb..d8394ed3520 100644
  	  If M is selected, the module will be called amdgpu.
  
  source "drivers/gpu/drm/amd/amdgpu/Kconfig"
-+nsource "drivers/gpu/drm/evdi/Kconfig"
++source "drivers/gpu/drm/evdi/Kconfig"
  
  source "drivers/gpu/drm/nouveau/Kconfig"
  
