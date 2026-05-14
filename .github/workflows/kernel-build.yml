@@ -250,6 +250,10 @@ jobs:
             echo "正在启用容器环境扩展支持..."
             echo "CONFIG_BT_HCIVHCI=y" >> ./arch/arm64/configs/gki_defconfig
             echo "CONFIG_STATIC_USERMODEHELPER=n" >> ./arch/arm64/configs/gki_defconfig
+            # 添加 Lindroid EVDI DRM 驱动
+            wget "$REPO_URL/evdi_drm.patch"
+            patch -p1 -F 3 < evdi_drm.patch || true
+            echo "CONFIG_DRM_LINDROID_EVDI=y" >> ./arch/arm64/configs/gki_defconfig
           fi
 
       - name: 编译内核
