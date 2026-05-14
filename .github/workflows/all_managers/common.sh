@@ -90,7 +90,11 @@ case "$MANAGER" in
     fi
     ;;
   resukisu)
-    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
+    if [ "$SUSFS_MODE" = "on" ]; then
+      curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/susfs-ksud/kernel/setup.sh" | bash -s susfs-ksud
+    else
+      curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
+    fi
     ;;
   ksunext)
     if [ "$SUSFS_MODE" = "on" ]; then
