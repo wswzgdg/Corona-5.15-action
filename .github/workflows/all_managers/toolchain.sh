@@ -71,11 +71,15 @@ ensure_llvm23_toolchain() {
   local llvm_apt_codename="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
   wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/llvm-archive-keyring.gpg
   printf 'deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/%s/ llvm-toolchain-%s main\n' "$llvm_apt_codename" "$llvm_apt_codename" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
-  sudo apt update -y
-  sudo apt install -y --no-install-recommends clang-23 lld-23 llvm-23
+  sudo apt-get update -y -qq
+  sudo apt-get install -y -qq --no-install-recommends clang-23 lld-23 llvm-23
   mkdir -p "$root_dir/clang23"
   rm -rf "$clang_root"
   cp -aL /usr/lib/llvm-23 "$clang_root"
+  # LLVM runtime libs may be in multiarch paths
+  for d in /usr/lib /usr/lib/x86_64-linux-gnu; do
+    find "$d" -maxdepth 1 \( -name 'libLLVM*.so*' -o -name 'libclang*.so*' -o -name 'liblld*.so*' \) -exec cp -a {} "$clang_root/lib/" \; 2>/dev/null || true
+  done
 }
 
 # Android clang14 uses the official Android prebuilts archive.
