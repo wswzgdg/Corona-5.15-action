@@ -103,6 +103,9 @@ jobs:
       matrix:
         manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
         susfs: ${{ inputs.build_susfs == 'all' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+        exclude:
+          - manager: none
+            susfs: true
     uses: ./.github/workflows/kernel-build.yml
     with:
       # 当前矩阵项正在构建哪个 manager，就把它传给复用工作流
