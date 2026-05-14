@@ -40,10 +40,14 @@ on:
       build_susfs:
         description: "启用 SUSFS"
         required: true
-        type: boolean
-        default: true
+        type: choice
+        default: 'true'
+        options:
+          - 'false'
+          - 'true'
+          - 'all'
       droidspaces_enable:
-        description: "启用 Droidspaces 容器支持(false关闭/standard容器+ntsync/extend扩展支持(含EVDI DRM))"
+        description: "启用 Droidspaces 容器支持"
         required: true
         type: choice
         default: 'false'
@@ -97,15 +101,15 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        # 逐个把同一套内核源码分别套到不同 manager 变体上构建
         manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
+        susfs: ${{ inputs.build_susfs == 'all' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
     uses: ./.github/workflows/kernel-build.yml
     with:
       # 当前矩阵项正在构建哪个 manager，就把它传给复用工作流
       manager: ${{ matrix.manager }}
       # 内核后缀原样传下去，只影响内核名，不影响管理器显示版本
       kernel_suffix: ${{ inputs.kernel_suffix }}
-      susfs: ${{ inputs.build_susfs }}
+      susfs: ${{ matrix.susfs }}
       droidspaces_enable: ${{ inputs.droidspaces_enable }}
       ccache_update: ${{ inputs.ccache_update }}
       ccache_key: ${{ env.CCACHE_KEY }}
@@ -210,7 +214,8 @@ jobs:
           PRERELEASE_FLAG: ${{ inputs.pre_release && '--prerelease' || '' }}
         run: |
           CLANG_LABEL="$(cat ./clang_version_label.txt 2>/dev/null || printf 'unknown')"
-          RELEASE_NAME="${{ inputs.pre_release && format('预发布 | 全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') || format('全量构建 #{0} | susfs:{1}', github.run_number, inputs.build_susfs && 'on' || 'off') }} | clang:${CLANG_LABEL}"
+          SUSFS_LABEL="${{ inputs.build_susfs == 'all' && 'both' || (inputs.build_susfs == 'true' && 'on' || 'off') }}"
+          RELEASE_NAME="${{ inputs.pre_release && format('预发布 | 全量构建 #{0} | susfs:{1}', github.run_number, SUSFS_LABEL) || format('全量构建 #{0} | susfs:{1}', github.run_number, SUSFS_LABEL) }} | clang:${CLANG_LABEL}"
           gh release create "$TAG_NAME" ./release_zips/*.zip \
             --repo "${{ github.repository }}" \
             --title "$RELEASE_NAME" \
