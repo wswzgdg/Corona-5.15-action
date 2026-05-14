@@ -226,10 +226,8 @@ jobs:
           patch -p1 -F 3 < 03.5.15+_use_android_abi_padding_for_posix_mqueue.patch || true
           wget "$REPO_URL/04.sysvipc_task_struct.patch"
           patch -p1 -F 3 < 04.sysvipc_task_struct.patch || true
-          # 应用 NTSync 补丁
-          wget "$REPO_URL/ntsync_base.patch"
+          # 应用 NTSync 补丁 (base 已在源码内置，仅保留文件不patch)
           wget "$REPO_URL/ntsync_compat_android13-5.15.patch"
-          patch -p1 -F 3 < ntsync_base.patch || true
           patch -p1 -F 3 < ntsync_compat_android13-5.15.patch || true
           # 开启 Droidspaces 容器所需内核支持
           echo "CONFIG_PID_NS=y" >> ./arch/arm64/configs/gki_defconfig
