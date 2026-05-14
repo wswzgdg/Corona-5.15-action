@@ -119,7 +119,7 @@ cd ..
 
 # SUSFS patch (skip none)
 # 只有启用了管理器且显式开启 SUSFS 时才打补丁；none 模式保持纯内核构建
-if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
+if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
   rm -rf susfs4ksu
   git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu susfs4ksu -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
   cp ./susfs4ksu/kernel_patches/50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch ./common/
