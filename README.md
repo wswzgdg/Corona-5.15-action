@@ -17,7 +17,7 @@
 
 ### 编译参数
 
-- **工具链**：LLVM/Clang 22.1.0
+- **工具链**：LLVM/Clang 14 / 22.1.0 / 23（默认 23）
 - **架构**：arm64
 - **内核Common**：[Corona-oplus-kernel/kernel_common_oplus](https://github.com/Corona-oplus-kernel/kernel_common_oplus)（android13-5.15-lts）
 
