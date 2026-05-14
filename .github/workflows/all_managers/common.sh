@@ -90,11 +90,7 @@ case "$MANAGER" in
     fi
     ;;
   resukisu)
-    if [ "$SUSFS_MODE" = "on" ]; then
-      curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/susfs-ksud/kernel/setup.sh" | bash -s susfs-ksud
-    else
-      curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
-    fi
+    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" | bash -s main
     ;;
   ksunext)
     if [ "$SUSFS_MODE" = "on" ]; then
@@ -127,6 +123,15 @@ if [ "$MANAGER" = "ksu" ] && [ "$SUSFS_MODE" = "on" ]; then
   cp ./susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
   cd ./common
   patch -p1 -F 3 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
+  # KSU compat patch 仅 ksu 分支打，其余管理器用 __weak 兜底符号
+  if [ "$MANAGER" != "ksu" ]; then
+    cat >> ../security/selinux/ss/services.c << 'SUSFS_WEAK'
+#if IS_ENABLED(CONFIG_KSU_SUSFS)
+__weak struct selinux_state fake_state;
+__weak bool ksu_selinux_hide_running __read_mostly = false;
+#endif
+SUSFS_WEAK
+  fi
   cd ..
 fi
 
