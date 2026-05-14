@@ -252,6 +252,7 @@ jobs:
 
       - name: 确保 ccache 目录存在
         if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
+        continue-on-error: true
         run: mkdir -p "${{ env.CCACHE_DIR }}"
 
       - name: 保存 ccache 缓存
