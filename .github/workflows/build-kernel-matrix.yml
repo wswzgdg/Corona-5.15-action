@@ -156,8 +156,9 @@ jobs:
           if compgen -G "release_zips/AK3-*.zip" > /dev/null; then
             echo "has_zips=true" >> "$GITHUB_OUTPUT"
           else
-            echo "未找到可发布的 ZIP 产物，跳过 release 阶段。"
             echo "has_zips=false" >> "$GITHUB_OUTPUT"
+            echo "::error::未找到可发布的 ZIP 产物"
+            exit 1
           fi
 
       - name: 记录成功发包的管理器
