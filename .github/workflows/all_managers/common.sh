@@ -129,7 +129,7 @@ if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
   patch -p1 -F 3 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
   # KSU compat patch 仅 ksu 分支打，其余管理器用 __weak 兜底符号
   if [ "$MANAGER" != "ksu" ]; then
-    cat >> ../security/selinux/ss/services.c << 'SUSFS_WEAK'
+    cat >> security/selinux/ss/services.c << 'SUSFS_WEAK'
 #if IS_ENABLED(CONFIG_KSU_SUSFS)
 __weak struct selinux_state fake_state;
 __weak bool ksu_selinux_hide_running __read_mostly = false;
