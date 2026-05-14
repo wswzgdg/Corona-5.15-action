@@ -214,6 +214,8 @@ jobs:
           ccache -s
 
       - name: 编译内核
+        id: compile
+        continue-on-error: true
         env:
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
@@ -319,6 +321,7 @@ jobs:
           key: repo-${{ runner.os }}-${{ github.ref_name }}
 
       - name: 上传 ZIP 工件
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
