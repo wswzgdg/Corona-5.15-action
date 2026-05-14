@@ -192,6 +192,8 @@ jobs:
             tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386 \
             repo
           ensure_toolchain "$CLANG_VERSION" "${{ github.workspace }}"
+          sudo curl -sSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/bin/repo
+          sudo chmod +x /usr/bin/repo
 
       - name: 安装 ccache ECS
         run: |
