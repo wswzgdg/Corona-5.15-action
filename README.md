@@ -48,3 +48,5 @@
 ## 致谢
 
 - [cctv18](https://github.com/cctv18) — [ccache-ECS](https://github.com/cctv18/oppo_oplus_realme_sm8750) 特化内核编译缓存方案
+- [Goldzxcbug/Droidspaces_Kernel_patch](https://github.com/Goldzxcbug/Droidspaces_Kernel_patch) — OKI 5.15 容器支持补丁
+- [Linux-on-droid/lindroid-drm-loopback](https://github.com/Linux-on-droid/lindroid-drm-loopback) — EVDI DRM 驱动
