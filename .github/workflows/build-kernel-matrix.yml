@@ -112,7 +112,7 @@ jobs:
       susfs: ${{ matrix.susfs }}
       droidspaces_enable: ${{ inputs.droidspaces_enable }}
       ccache_update: ${{ inputs.ccache_update }}
-      ccache_key: ${{ env.CCACHE_KEY }}
+      ccache_key: 'ccache-ecsv3-5.15'
       use_kpn: ${{ inputs.use_kpn }}
       version_name: ${{ inputs.version_name }}
       clang_version: ${{ inputs.clang_version }}
@@ -215,7 +215,11 @@ jobs:
         run: |
           CLANG_LABEL="$(cat ./clang_version_label.txt 2>/dev/null || printf 'unknown')"
           SUSFS_LABEL="${{ inputs.build_susfs == 'all' && 'both' || (inputs.build_susfs == 'true' && 'on' || 'off') }}"
-          RELEASE_NAME="${{ inputs.pre_release && format('预发布 | 全量构建 #{0} | susfs:{1}', github.run_number, SUSFS_LABEL) || format('全量构建 #{0} | susfs:{1}', github.run_number, SUSFS_LABEL) }} | clang:${CLANG_LABEL}"
+          if [ "${{ inputs.pre_release }}" = "true" ]; then
+            RELEASE_NAME="预发布 | 全量构建 #${{ github.run_number }} | susfs:${SUSFS_LABEL} | clang:${CLANG_LABEL}"
+          else
+            RELEASE_NAME="全量构建 #${{ github.run_number }} | susfs:${SUSFS_LABEL} | clang:${CLANG_LABEL}"
+          fi
           gh release create "$TAG_NAME" ./release_zips/*.zip \
             --repo "${{ github.repository }}" \
             --title "$RELEASE_NAME" \
