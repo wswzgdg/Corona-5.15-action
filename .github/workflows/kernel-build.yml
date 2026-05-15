@@ -36,6 +36,11 @@ on:
         required: false
         type: boolean
         default: false
+      android_release:
+        description: 'Android 版本'
+        required: false
+        type: string
+        default: '16'
       version_name:
         description: 'KSU 版本名主体'
         required: false
@@ -221,6 +226,7 @@ jobs:
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
           ANDROID_VERSION: android13
           KERNEL_VERSION: '5.15'
+          ANDROID_RELEASE: ${{ inputs.android_release }}
           DROIDSPACES_ENABLE: ${{ inputs.droidspaces_enable }}
           CLANG_VERSION: ${{ inputs.clang_version }}
           SKIP_APT: '1'

@@ -59,12 +59,20 @@ fi
 cd kernel_platform
 rm -rf common AnyKernel3
 rm -rf "$WORKDIR/out_zips"
-COMMON_URL="https://github.com/Corona-oplus-kernel/kernel_common_oplus.git"
+if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+  COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
+  COMMON_BRANCH="Corona"
+else
+  COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
+  COMMON_BRANCH="android13-5.15-lts"
+fi
 # 有 token 时改用带鉴权地址，避免私有/限流场景下 clone 失败
 if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
-  COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/Corona-oplus-kernel/kernel_common_oplus.git"
+  COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/${COMMON_REPO}.git"
+else
+  COMMON_URL="https://github.com/${COMMON_REPO}.git"
 fi
-git clone --depth=1 "$COMMON_URL" -b android13-5.15-lts common
+git clone --depth=1 "$COMMON_URL" -b "$COMMON_BRANCH" common
 cd ../
 
 # toolchain (reuse to save space)
