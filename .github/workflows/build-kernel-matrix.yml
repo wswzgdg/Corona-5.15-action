@@ -214,6 +214,7 @@ jobs:
           BUILD_NONE: ${{ inputs.build_none }}
           BUILD_SUSFS: ${{ inputs.build_susfs }}
           BUILD_DROIDSPACES: ${{ inputs.droidspaces_enable }}
+          BUILD_ANDROID_RELEASE: ${{ inputs.android_release }}
           BUILD_USE_KPN: ${{ inputs.use_kpn }}
         run: |
           python3 .github/workflows/all_managers/release_metadata.py generate-release-body
@@ -227,11 +228,9 @@ jobs:
         run: |
           CLANG_LABEL="$(cat ./clang_version_label.txt 2>/dev/null || printf 'unknown')"
           SUSFS_LABEL="${{ inputs.build_susfs == 'all' && 'both' || (inputs.build_susfs == 'true' && 'on' || 'off') }}"
-          if [ "${{ inputs.pre_release }}" = "true" ]; then
-            RELEASE_NAME="预发布 | 全量构建 #${{ github.run_number }} | susfs:${SUSFS_LABEL} | clang:${CLANG_LABEL}"
-          else
-            RELEASE_NAME="全量构建 #${{ github.run_number }} | susfs:${SUSFS_LABEL} | clang:${CLANG_LABEL}"
-          fi
+          DROIDSPACES_LABEL="${{ inputs.droidspaces_enable }}"
+          PREFIX="${{ inputs.pre_release == true && '预发布 | ' || '' }}"
+          RELEASE_NAME="${PREFIX}全量构建 #${{ github.run_number }} | A${{ inputs.android_release }} | susfs:${SUSFS_LABEL} | ds:${DROIDSPACES_LABEL} | clang:${CLANG_LABEL}"
           gh release create "$TAG_NAME" ./release_zips/*.zip \
             --repo "${{ github.repository }}" \
             --title "$RELEASE_NAME" \

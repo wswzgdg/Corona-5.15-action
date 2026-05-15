@@ -156,7 +156,7 @@ def list_recent_commits(remote, branch, limit=15):
     with tempfile.TemporaryDirectory(prefix='release-meta-') as temp_dir:
         try:
             git_check_output(['git', 'init'], cwd=temp_dir)
-            git_check_output(['git', 'fetch', '--depth', str(limit), tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
+            git_check_output(['git', 'fetch', '--depth', str(limit), '--filter=blob:none', tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
             output = git_check_output(
                 ['git', 'log', f'--max-count={limit}', '--format=%H%x01%s', 'FETCH_HEAD'],
                 cwd=temp_dir,
@@ -249,7 +249,7 @@ def build_repo_entry(repo_tuple):
 def build_current_meta(selected_managers, successful_managers):
     """Build the current source snapshot that will be rendered and persisted."""
     current = {
-        '_build': {'susfs': get_susfs_label(), 'kpn': get_kpn_label()},
+        '_build': {'susfs': get_susfs_label(), 'kpn': get_kpn_label(), 'droidspaces': os.environ.get('BUILD_DROIDSPACES', 'false'), 'android': os.environ.get('BUILD_ANDROID_RELEASE', '16')},
         '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
         '_ak3': {'repos': []},
     }
@@ -433,9 +433,12 @@ def append_hidden_meta(lines, current_meta):
 
 def build_release_lines(previous_meta, current_meta):
     """Render the markdown lines for the release body."""
-    susfs_label = current_meta.get('_build', {}).get('susfs', get_susfs_label())
-    kpn_label = current_meta.get('_build', {}).get('kpn', get_kpn_label())
-    lines = [f'## 构建选项', '', f'- SUSFS: {susfs_label}', f'- KP-N: {kpn_label}', '', '## 源码变更', '']
+    build_meta = current_meta.get('_build', {})
+    susfs_label = build_meta.get('susfs', get_susfs_label())
+    kpn_label = build_meta.get('kpn', get_kpn_label())
+    droidspaces_label = build_meta.get('droidspaces', 'false')
+    android_label = build_meta.get('android', '16')
+    lines = [f'## 构建选项', '', f'- Android: {android_label}', f'- SUSFS: {susfs_label}', f'- Droidspaces: {droidspaces_label}', f'- KP-N: {kpn_label}', '', '## 源码变更', '']
     append_common_section(lines, current_meta, previous_meta)
     append_ak3_section(lines, current_meta, previous_meta)
     append_manager_section(lines, current_meta, previous_meta)
