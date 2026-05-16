@@ -44,7 +44,12 @@ fi
 
 if [ ! -d .repo ]; then
   echo "初始化源码仓库..."
-  repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m oneplus_ace3_b.xml --no-tags --depth=1
+  if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+    MANIFEST_XML="oneplus_ace3_v.xml"
+  else
+    MANIFEST_XML="oneplus_ace3_b.xml"
+  fi
+  repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m "$MANIFEST_XML" --no-tags --depth=1
 else
   echo "复用已有源码仓库..."
 fi
