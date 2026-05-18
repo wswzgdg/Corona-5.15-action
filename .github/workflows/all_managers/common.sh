@@ -207,9 +207,13 @@ if [ "${DROIDSPACES_ENABLE:-false}" != "false" ]; then
     wget "$REPO_URL/$p" -O "$p"
     patch -p1 -F 3 < "$p" -d ./common || true
   done
-  # 应用 NTSync 补丁 (base 已在源码内置，仅打 compat)
-  wget "$REPO_URL/ntsync_compat_android13-5.15.patch" -O ntsync_compat.patch
-  patch -p1 -F 3 < ntsync_compat.patch -d ./common || true
+  # 应用 NTSync 补丁；如源码已含 ntsync.c 则跳过，避免 Kconfig/Makefile 条目重复
+  if [ -f ./common/drivers/misc/ntsync.c ]; then
+    echo "common 源码已含 ntsync.c，跳过 NTSync 补丁"
+  else
+    wget "$REPO_URL/ntsync_compat_android13-5.15.patch" -O ntsync_compat.patch
+    patch -p1 -F 3 < ntsync_compat.patch -d ./common || true
+  fi
   # 开启 Droidspaces 容器所需内核配置
   DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
   echo "CONFIG_PID_NS=y" >> "$DEFCONFIG"
