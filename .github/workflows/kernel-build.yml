@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: 'false'
+      susfs_mode:
+        description: 'SUSFS 模式 (false/true/all)，仅用于命名'
+        required: false
+        type: string
+        default: ''
       ccache_update:
         description: '是否覆盖更新 ccache 缓存'
         required: false
@@ -228,6 +233,7 @@ jobs:
           KERNEL_VERSION: '5.15'
           ANDROID_RELEASE: ${{ inputs.android_release }}
           DROIDSPACES_ENABLE: ${{ inputs.droidspaces_enable }}
+          BUILD_SUSFS_MODE: ${{ inputs.susfs_mode }}
           CLANG_VERSION: ${{ inputs.clang_version }}
           SKIP_APT: '1'
           CCACHE_LOGFILE: ${{ github.workspace }}/kernel_workspace/ccache.log
@@ -330,7 +336,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.manager == 'none' && 'ak3-noksu' || format('ak3-{0}', inputs.manager) }}
+          name: ${{ format('ak3-{0}{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, (inputs.susfs_mode == 'all' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
 
       - name: 上传 clang 元数据工件

@@ -47,7 +47,7 @@ AK3_BY_MANAGER = {
     'kowsu': 'main',
     'none': 'main',
 }
-ZIP_NAME_PATTERN = re.compile(r'^AK3-[^-]+-(.+?)@bai\.zip$')
+ZIP_NAME_PATTERN = re.compile(r'^AK3-[^-]+-(.+?)(?:_SUSFS)?@bai\.zip$')
 SOURCE_META_PATTERN = re.compile(r'<!-- source-meta-begin\r?\n(.*?)\r?\nsource-meta-end -->', re.S)
 
 

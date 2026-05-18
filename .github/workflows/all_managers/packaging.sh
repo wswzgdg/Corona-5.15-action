@@ -59,6 +59,7 @@ package_anykernel_zip() {
   local image_path="$3"
   local output_path="$4"
   local none_label="${5:-noksu}"
+  local susfs_label="${6:-}"
 
   cp -f "$image_path" ./AnyKernel3/Image/Image
   if [ ! -f ./AnyKernel3/Image/Image ]; then
@@ -68,7 +69,9 @@ package_anykernel_zip() {
 
   local manager_label
   manager_label="$(manager_type_name "$manager" "$none_label")"
-  local zip_name="AK3-${kernel_version}-${manager_label}@bai.zip"
+  local susfs_suffix=""
+  [ -n "$susfs_label" ] && susfs_suffix="_${susfs_label}"
+  local zip_name="AK3-${kernel_version}-${manager_label}${susfs_suffix}@bai.zip"
   (cd AnyKernel3 && zip -r "$output_path/$zip_name" ./*)
   printf '%s' "$zip_name"
 }
