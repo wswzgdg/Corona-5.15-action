@@ -1,0 +1,32 @@
+name: 月度全量构建
+
+on:
+  schedule:
+    # 每月 1 号 UTC 00:47（Asia/Shanghai 08:47），避开整点高峰
+    - cron: '47 0 1 * *'
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: 触发全量构建
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run build-kernel-matrix.yml \
+            --ref "${{ github.ref_name }}" \
+            -f build_sukisu=true \
+            -f build_resukisu=true \
+            -f build_ksunext=true \
+            -f build_ksu=true \
+            -f build_kowsu=true \
+            -f build_none=true \
+            -f build_susfs=all \
+            -f droidspaces_enable=extend \
+            -f ccache_update=true
