@@ -43,23 +43,17 @@ if [ -z "${SKIP_APT:-}" ]; then
 fi
 
 if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
-  if [ ! -d .repo ]; then
-    echo "初始化源码仓库..."
-    if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-      MANIFEST_XML="oneplus_ace3_v.xml"
-    else
-      MANIFEST_XML="oneplus_ace3_b.xml"
-    fi
-    repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m "$MANIFEST_XML" --no-tags --depth=1
+  if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+    VENDOR_BRANCH="sm8550_v_15.0.0_oneplus11"
   else
-    echo "复用已有源码仓库..."
+    VENDOR_BRANCH="sm8550_b_16.0.0_oneplus_11"
   fi
-  REPO_LAUNCHER="$PWD/.repo/repo/repo"
-  # 优先使用仓库内 repo init 拉下来的 launcher，找不到时再退回系统 repo 命令
-  if [ -x "$REPO_LAUNCHER" ]; then
-    "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
+  VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
+  mkdir -p kernel_platform
+  if [ ! -d kernel_platform/vendor/.git ]; then
+    git clone --depth=1 -b "$VENDOR_BRANCH" "$VENDOR_URL" kernel_platform/vendor
   else
-    repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
+    echo "vendor 已存在，跳过 clone"
   fi
 
   cd kernel_platform

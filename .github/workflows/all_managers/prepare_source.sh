@@ -1,35 +1,24 @@
 #!/usr/bin/env bash
 set -e
 
-# 前置 prepare-source 工作流的源码同步阶段：只做 repo init / repo sync。
-# common（私有 kernel_common_oplus）必须留到 build 阶段再 clone，否则会随 artifact
-# 暴露给公开仓库的访客；setlocalversion 修补、abi 清理同样放到 build 阶段。
+# 直接 clone 公开 vendor 仓库到 kernel_platform/vendor，
+# 与 build 阶段才克隆的私有 common 保持平级。
+# AnyKernel3 / common / setlocalversion 等仍由 build 阶段单独处理。
 
-WORKDIR="$(pwd)"
-
-mkdir -p kernel_workspace
-cd kernel_workspace
-
-if [ ! -d .repo ]; then
-  echo "初始化源码仓库..."
-  if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-    MANIFEST_XML="oneplus_ace3_v.xml"
-  else
-    MANIFEST_XML="oneplus_ace3_b.xml"
-  fi
-  repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m "$MANIFEST_XML" --no-tags --depth=1
+if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+  VENDOR_BRANCH="sm8550_v_15.0.0_oneplus11"
 else
-  echo "复用已有源码仓库..."
+  VENDOR_BRANCH="sm8550_b_16.0.0_oneplus_11"
 fi
-REPO_LAUNCHER="$PWD/.repo/repo/repo"
-if [ -x "$REPO_LAUNCHER" ]; then
-  "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
+VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
+
+mkdir -p kernel_workspace/kernel_platform
+cd kernel_workspace/kernel_platform
+
+if [ -d vendor/.git ]; then
+  echo "vendor 已存在，跳过 clone"
 else
-  repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
+  git clone --depth=1 -b "$VENDOR_BRANCH" "$VENDOR_URL" vendor
 fi
 
-# 顺手清掉 manifest 里同样会被 build 重新克隆的目录，缩小 artifact 体积
-cd kernel_platform
-rm -rf common AnyKernel3
-
-echo "源码 workspace 已准备完成（不含 common）"
+echo "vendor 已就绪 ($VENDOR_BRANCH)"

@@ -106,16 +106,6 @@ jobs:
           echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
           mkdir -p $HOME/.ccache_5.15
 
-      - name: 载入 repo 缓存
-        if: ${{ !inputs.use_prepared_source }}
-        uses: actions/cache/restore@v5
-        id: repo-restore
-        with:
-          path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.ref_name }}
-          restore-keys: |
-            repo-${{ runner.os }}-
-
       - name: 下载预备 workspace
         if: ${{ inputs.use_prepared_source }}
         uses: actions/download-artifact@v8
@@ -263,27 +253,6 @@ jobs:
           CLANG_LABEL_VERSION="$(printf '%s' "$CLANG_LABEL_RAW" | grep -oE '[0-9]+(\.[0-9]+){0,2}' | head -n 1)"
           [ -n "$CLANG_LABEL_VERSION" ] || CLANG_LABEL_VERSION="$CLANG_VERSION_INPUT"
           printf '%s' "$CLANG_LABEL_VERSION" > "$GITHUB_WORKSPACE/clang_meta/${{ inputs.manager }}.txt"
-
-      - name: 覆盖同 key 的 repo 缓存
-        if: ${{ always() && !inputs.use_prepared_source }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: repo-${{ runner.os }}-${{ github.ref_name }}
-        run: |
-          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
-            echo "已删除旧的 repo 缓存: $CACHE_KEY"
-          else
-            echo "旧的 repo 缓存不存在，直接保存新缓存"
-          fi
-
-      - name: 保存 repo 缓存
-        if: ${{ always() && !inputs.use_prepared_source }}
-        continue-on-error: true
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ github.workspace }}/kernel_workspace/.repo
-          key: repo-${{ runner.os }}-${{ github.ref_name }}
 
       - name: 上传 ZIP 工件
         if: always()
