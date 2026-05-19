@@ -343,5 +343,5 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ format('clang-meta-{0}', inputs.manager) }}
+          name: ${{ format('clang-meta-{0}{1}', inputs.manager, (inputs.susfs_mode == 'all' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
           path: ${{ github.workspace }}/clang_meta/${{ inputs.manager }}.txt

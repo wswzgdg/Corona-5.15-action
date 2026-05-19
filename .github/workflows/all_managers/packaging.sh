@@ -10,7 +10,7 @@ manager_type_name() {
   case "$manager" in
     sukisu) printf 'SukiSU' ;;
     resukisu) printf 'ReSukiSU' ;;
-    ksunext) printf 'KSUNext' ;;
+    ksunext) printf 'KSUNEXT' ;;
     ksu) printf 'KSU' ;;
     kowsu) printf 'KowSU' ;;
     none) printf '%s' "$none_label" ;;

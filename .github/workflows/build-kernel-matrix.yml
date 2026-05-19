@@ -18,7 +18,7 @@ on:
         type: boolean
         default: true
       build_ksunext:
-        description: "编译 KSUNext"
+        description: "编译 KSUNEXT"
         required: true
         type: boolean
         default: false
@@ -105,8 +105,8 @@ jobs:
       actions: write
       contents: read
     strategy:
-      # 这里串行跑各个 manager，避免多个大编译任务并发把 runner 资源打满
-      max-parallel: 1
+      # 同时最多 2 个矩阵项并行；ccache/clang-meta/工件名按 manager+susfs 区分，避免冲突
+      max-parallel: 2
       fail-fast: false
       matrix:
         manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
