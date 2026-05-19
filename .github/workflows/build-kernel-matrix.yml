@@ -137,12 +137,6 @@ jobs:
     permissions:
       actions: write
       contents: read
-      packages: read
-    container:
-      image: ghcr.io/wswzgdg/corona-5.15-action-builder:clang23
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -157,6 +151,14 @@ jobs:
           key: repo-${{ runner.os }}-${{ github.ref_name }}
           restore-keys: |
             repo-${{ runner.os }}-
+
+      - name: 安装 repo 依赖
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            git python3 python-is-python3 curl ca-certificates zstd repo
+          sudo curl -sSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/bin/repo
+          sudo chmod +x /usr/bin/repo
 
       - name: 同步源码
         env:
@@ -189,7 +191,7 @@ jobs:
 
       - name: 打包 workspace
         run: |
-          cd ${{ github.workspace }}
+          cd "$GITHUB_WORKSPACE"
           tar --exclude='kernel_workspace/.repo' \
               -I 'zstd -T0 -3' \
               -cf kernel_workspace.tar.zst kernel_workspace
