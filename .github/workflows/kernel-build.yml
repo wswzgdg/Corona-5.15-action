@@ -71,6 +71,11 @@ on:
         required: false
         type: boolean
         default: false
+      builder_image:
+        description: '预构建镜像 (ghcr.io/...:tag)，默认指向本仓库的 builder image'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build-kernel:
@@ -80,6 +85,12 @@ jobs:
     permissions:
       actions: write
       contents: read
+      packages: read
+    container:
+      image: ${{ inputs.builder_image != '' && inputs.builder_image || 'ghcr.io/wswzgdg/corona-5.15-action-builder:clang23' }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -91,35 +102,6 @@ jobs:
           echo "CCACHE_DIR=$HOME/.ccache_5.15" >> $GITHUB_ENV
           echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
           mkdir -p $HOME/.ccache_5.15
-
-      - name: 载入 clang22 缓存
-        if: ${{ inputs.clang_version == '22' }}
-        uses: actions/cache@v5
-        with:
-          path: ${{ github.workspace }}/clang22
-          key: clang22-llvm-22.1.0-${{ runner.os }}
-          restore-keys: |
-            clang22-llvm-22.1.0-${{ runner.os }}
-
-      - name: 载入 clang14 缓存
-        if: ${{ inputs.clang_version == '14' }}
-        uses: actions/cache/restore@v5
-        id: clang14-restore
-        with:
-          path: ${{ github.workspace }}/clang14
-          key: clang14-android-r450784d-${{ runner.os }}
-          restore-keys: |
-            clang14-android-r450784d-${{ runner.os }}
-
-      - name: 载入 clang23 缓存
-        if: ${{ inputs.clang_version == '23' }}
-        uses: actions/cache/restore@v5
-        id: clang23-restore
-        with:
-          path: ${{ github.workspace }}/clang23
-          key: clang23-apt-v3-${{ runner.os }}
-          restore-keys: |
-            clang23-apt-v3-${{ runner.os }}
 
       - name: 载入 repo 缓存
         if: ${{ !inputs.use_prepared_source }}
@@ -141,8 +123,6 @@ jobs:
       - name: 解压预备 workspace
         if: ${{ inputs.use_prepared_source }}
         run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq --no-install-recommends zstd
           cd ${{ github.workspace }}
           tar -I 'zstd -T0' -xf kernel_workspace.tar.zst
           rm -f kernel_workspace.tar.zst
@@ -183,56 +163,17 @@ jobs:
             echo "公共 ccache 中未找到对应的 ccache 文件，将进行全量全新编译..."
           fi
 
-      - name: 清理 Runner 磁盘空间
-        run: |
-         mkdir -p /home/runner/.ccache_5.15
-         touch /home/runner/.ccache_5.15/DO_NOT_DELETE
-         sudo rm -rf /usr/share/dotnet || true
-         sudo rm -rf /usr/local/lib/android || true
-         sudo rm -rf /opt/ghc || true
-         sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-         sudo rm -rf /usr/local/share/powershell || true
-         sudo rm -rf /usr/local/graalvm || true
-         sudo rm -rf /usr/local/.ghcup || true
-         sudo rm -rf /usr/local/lib/node_modules || true
-
-         # 清理 APT 缓存和日志
-         sudo apt-get clean -qq
-         sudo apt-get autoclean -qq
-         sudo rm -rf /var/log/*.log
-         sudo rm -rf /var/cache/apt/archives/*
-
-         #清理临时文件
-         sudo rm -rf /tmp/*
-         sudo rm -rf /var/tmp/*
-
-         # 查看清理后的空间
-         if [ -d "/home/runner/.ccache_5.15" ]; then
-         echo "ccache缓存目录存在"
-         fi
-         df -h
-         echo "当前根分区可用空间：$(df -B GB / | grep / | awk '{print $4}')"
-
-      - name: 安装环境依赖
+      - name: 准备工具链
         env:
           CLANG_VERSION: ${{ inputs.clang_version }}
         run: |
           source .github/workflows/all_managers/toolchain.sh
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            ccache flex bison dwarves libssl-dev libelf-dev bc python3 python-is-python3 \
-            make cmake zip aria2 gnupg gawk rsync \
-            binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
-            tar gzip xz-utils bzip2 device-tree-compiler libc6-dev-i386 \
-            repo
           ensure_toolchain "$CLANG_VERSION" "${{ github.workspace }}"
-          sudo curl -sSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/bin/repo
-          sudo chmod +x /usr/bin/repo
 
       - name: 安装 ccache ECS
         run: |
-          sudo cp -f ./lib/ccache-x86-64 /usr/bin/ccache
-          sudo chmod +x /usr/bin/ccache
+          cp -f ./lib/ccache-x86-64 /usr/bin/ccache
+          chmod +x /usr/bin/ccache
           ccache --version | head -n 1
 
       - name: 初始化 ccache
@@ -301,22 +242,6 @@ jobs:
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
-
-      - name: 保存 clang23 缓存
-        if: ${{ always() && inputs.clang_version == '23' && steps.clang23-restore.outputs.cache-hit != 'true' }}
-        continue-on-error: true
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ github.workspace }}/clang23
-          key: clang23-apt-v3-${{ runner.os }}
-
-      - name: 保存 clang14 缓存
-        if: ${{ always() && inputs.clang_version == '14' && steps.clang14-restore.outputs.cache-hit != 'true' }}
-        continue-on-error: true
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ github.workspace }}/clang14
-          key: clang14-android-r450784d-${{ runner.os }}
 
       - name: 记录 clang 版本元数据
         if: ${{ always() }}
