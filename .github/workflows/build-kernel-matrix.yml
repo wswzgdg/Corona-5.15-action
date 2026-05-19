@@ -277,7 +277,7 @@ jobs:
       max-parallel: 2
       fail-fast: false
       matrix:
-        manager: [resukisu, sukisu, ksunext, ksu, kowsu, none]
+        manager: [none, resukisu, sukisu, ksunext, ksu, kowsu]
         susfs: ${{ inputs.build_susfs == 'all' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
         exclude:
           - manager: none
