@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-# 直接 clone 公开 vendor 仓库到 kernel_platform/vendor，
-# 与 build 阶段才克隆的私有 common 保持平级。
-# AnyKernel3 / common / setlocalversion 等仍由 build 阶段单独处理。
+# 直接 clone OnePlusOSS sm8550 到 kernel_workspace 根目录。
+# 该仓库根树就是 kernel_platform/ 和 vendor/，common 仓库里的
+# kernel_platform/common/drivers/soc/oplus/storage 等 symlink 指向
+# ../../../../../vendor/oplus/kernel/...，必须落到 kernel_workspace 根。
+# common（私有）和 AnyKernel3 一律保留到 build 阶段再 clone。
 
 if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
   VENDOR_BRANCH="oneplus/sm8550_v_15.0.0_oneplus11"
@@ -12,13 +14,11 @@ else
 fi
 VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
 
-mkdir -p kernel_workspace/kernel_platform
-cd kernel_workspace/kernel_platform
-
-if [ -d vendor/.git ]; then
-  echo "vendor 已存在，跳过 clone"
+if [ ! -d kernel_workspace/.git ]; then
+  rm -rf kernel_workspace
+  git clone --depth=1 -b "$VENDOR_BRANCH" "$VENDOR_URL" kernel_workspace
 else
-  git clone --depth=1 -b "$VENDOR_BRANCH" "$VENDOR_URL" vendor
+  echo "kernel_workspace 已存在，跳过 clone"
 fi
 
 echo "vendor 已就绪 ($VENDOR_BRANCH)"

@@ -28,8 +28,6 @@ export PATH="/usr/lib/ccache:$PATH"
 export PATH="$(toolchain_bin_dir "$LLVM_CLANG_VERSION" "$WORKDIR"):$PATH"
 export LD_LIBRARY_PATH="$(toolchain_lib_dir "$LLVM_CLANG_VERSION" "$WORKDIR")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-mkdir -p kernel_workspace
-cd kernel_workspace
 # 未设置 SKIP_APT 时才安装依赖，方便在重复调用时跳过 apt 节省时间
 if [ -z "${SKIP_APT:-}" ]; then
   sudo apt-mark hold firefox 2>/dev/null
@@ -49,16 +47,18 @@ if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
     VENDOR_BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
   fi
   VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
-  mkdir -p kernel_platform
-  if [ ! -d kernel_platform/vendor/.git ]; then
-    git clone --depth=1 -b "$VENDOR_BRANCH" "$VENDOR_URL" kernel_platform/vendor
+  # vendor 仓库根目录就是 kernel_platform/ + vendor/，直接落到 kernel_workspace 即可
+  if [ ! -d kernel_workspace/.git ]; then
+    rm -rf kernel_workspace
+    git clone --depth=1 -b "$VENDOR_BRANCH" "$VENDOR_URL" kernel_workspace
   else
-    echo "vendor 已存在，跳过 clone"
+    echo "kernel_workspace 已存在，跳过 clone"
   fi
 
+  cd kernel_workspace
+  rm -rf "$WORKDIR/out_zips"
   cd kernel_platform
   rm -rf common AnyKernel3
-  rm -rf "$WORKDIR/out_zips"
   if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
     COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
     COMMON_BRANCH="Corona"
@@ -90,6 +90,7 @@ else
   echo "复用预置 workspace，跳过 repo sync"
   ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
   rm -rf "$WORKDIR/out_zips"
+  cd kernel_workspace
   cd kernel_platform
   rm -rf common AnyKernel3
   # common（私有仓库）一定要在 build 阶段才 clone，避免被 prepare 阶段 artifact 泄露
