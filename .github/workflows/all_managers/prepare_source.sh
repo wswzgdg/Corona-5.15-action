@@ -6,9 +6,9 @@ set -e
 # AnyKernel3 / common / setlocalversion 等仍由 build 阶段单独处理。
 
 if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-  VENDOR_BRANCH="sm8550_v_15.0.0_oneplus11"
+  VENDOR_BRANCH="oneplus/sm8550_v_15.0.0_oneplus11"
 else
-  VENDOR_BRANCH="sm8550_b_16.0.0_oneplus_11"
+  VENDOR_BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
 fi
 VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
 

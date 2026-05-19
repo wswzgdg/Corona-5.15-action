@@ -44,9 +44,9 @@ fi
 
 if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
   if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-    VENDOR_BRANCH="sm8550_v_15.0.0_oneplus11"
+    VENDOR_BRANCH="oneplus/sm8550_v_15.0.0_oneplus11"
   else
-    VENDOR_BRANCH="sm8550_b_16.0.0_oneplus_11"
+    VENDOR_BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
   fi
   VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
   mkdir -p kernel_platform

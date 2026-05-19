@@ -149,9 +149,9 @@ jobs:
           VENDOR_URL: https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550
         run: |
           if [ "$ANDROID_RELEASE" = "15" ]; then
-            BRANCH="sm8550_v_15.0.0_oneplus11"
+            BRANCH="oneplus/sm8550_v_15.0.0_oneplus11"
           else
-            BRANCH="sm8550_b_16.0.0_oneplus_11"
+            BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
           fi
           VENDOR_SHA=$(git ls-remote "$VENDOR_URL" "$BRANCH" | awk 'NR==1{print $1}')
           if [ -z "$VENDOR_SHA" ]; then
@@ -176,7 +176,7 @@ jobs:
       contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      PREPARED_KEY: prepared-${{ runner.os }}-a${{ inputs.android_release }}-${{ needs.vendor-hash.outputs.hash }}
+      PREPARED_KEY: prepared-Linux-a${{ inputs.android_release }}-${{ needs.vendor-hash.outputs.hash }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
