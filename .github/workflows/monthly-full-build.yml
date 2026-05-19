@@ -29,4 +29,5 @@ jobs:
             -f build_none=true \
             -f build_susfs=all \
             -f droidspaces_enable=extend \
-            -f ccache_update=true
+            -f ccache_update=true \
+            -f refresh_source=true

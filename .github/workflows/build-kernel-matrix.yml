@@ -60,6 +60,11 @@ on:
         required: false
         type: boolean
         default: false
+      refresh_source:
+        description: "强制刷新 prepared-workspace 缓存"
+        required: false
+        type: boolean
+        default: false
       use_kpn:
         description: "使用 KP-N patch 内核镜像"
         required: false
@@ -130,8 +135,41 @@ jobs:
           fi
           echo "本次共需编译 $total 个矩阵项，use_prepared=$( [ $total -ge 3 ] && echo true || echo false )"
 
-  prepare-source:
+  vendor-hash:
     needs: count-builds
+    if: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      hash: ${{ steps.h.outputs.hash }}
+    steps:
+      - name: 解析 vendor 仓库哈希
+        id: h
+        env:
+          ANDROID_RELEASE: ${{ inputs.android_release }}
+          MANIFEST_URL: https://github.com/Numbersf/kernel_manifest
+          MANIFEST_BRANCH: oneplus/sm8550
+        run: |
+          if [ "$ANDROID_RELEASE" = "15" ]; then
+            XML=oneplus_ace3_v.xml
+          else
+            XML=oneplus_ace3_b.xml
+          fi
+          MANIFEST_SHA=$(git ls-remote "$MANIFEST_URL" "$MANIFEST_BRANCH" | awk 'NR==1{print $1}')
+          if [ -z "$MANIFEST_SHA" ]; then
+            echo "::error::无法解析 manifest HEAD"
+            exit 1
+          fi
+          HASH=$(printf '%s\n%s\n%s\n' "$MANIFEST_SHA" "$ANDROID_RELEASE" "$XML" | sha256sum | cut -c1-12)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+          {
+            echo "manifest=$MANIFEST_SHA"
+            echo "android_release=$ANDROID_RELEASE"
+            echo "xml=$XML"
+            echo "vendor_hash=$HASH"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  prepare-source:
+    needs: [count-builds, vendor-hash]
     if: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
     runs-on: ubuntu-latest
     permissions:
@@ -139,11 +177,34 @@ jobs:
       contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PREPARED_KEY: prepared-${{ runner.os }}-a${{ inputs.android_release }}-${{ needs.vendor-hash.outputs.hash }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: 载入 prepared-workspace 缓存
+        uses: actions/cache/restore@v5
+        id: prepared-restore
+        with:
+          path: ${{ github.workspace }}/kernel_workspace.tar.zst
+          key: ${{ env.PREPARED_KEY }}
+
+      - name: 计算缓存命中状态
+        id: gate
+        env:
+          CACHE_HIT: ${{ steps.prepared-restore.outputs.cache-hit }}
+          REFRESH: ${{ inputs.refresh_source }}
+        run: |
+          if [ "$CACHE_HIT" = "true" ] && [ "$REFRESH" != "true" ]; then
+            echo "需要同步=否（命中 prepared-workspace 缓存）"
+            echo "need_sync=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "需要同步=是（hit=$CACHE_HIT refresh=$REFRESH）"
+            echo "need_sync=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 载入 repo 缓存
+        if: ${{ steps.gate.outputs.need_sync == 'true' }}
         uses: actions/cache/restore@v5
         id: repo-restore
         with:
@@ -153,6 +214,7 @@ jobs:
             repo-${{ runner.os }}-
 
       - name: 安装 repo 依赖
+        if: ${{ steps.gate.outputs.need_sync == 'true' }}
         run: |
           sudo apt-get update -y -qq
           sudo apt-get install -y -qq --no-install-recommends \
@@ -161,6 +223,7 @@ jobs:
           sudo chmod +x /usr/bin/repo
 
       - name: 同步源码
+        if: ${{ steps.gate.outputs.need_sync == 'true' }}
         env:
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
           ANDROID_RELEASE: ${{ inputs.android_release }}
@@ -169,7 +232,7 @@ jobs:
           .github/workflows/all_managers/prepare_source.sh
 
       - name: 覆盖同 key 的 repo 缓存
-        if: ${{ always() }}
+        if: ${{ always() && steps.gate.outputs.need_sync == 'true' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -182,7 +245,7 @@ jobs:
           fi
 
       - name: 保存 repo 缓存
-        if: ${{ always() }}
+        if: ${{ always() && steps.gate.outputs.need_sync == 'true' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
@@ -190,12 +253,42 @@ jobs:
           key: repo-${{ runner.os }}-${{ github.ref_name }}
 
       - name: 打包 workspace
+        if: ${{ steps.gate.outputs.need_sync == 'true' }}
         run: |
           cd "$GITHUB_WORKSPACE"
           tar --exclude='kernel_workspace/.repo' \
               -I 'zstd -T0 -3' \
               -cf kernel_workspace.tar.zst kernel_workspace
           ls -lh kernel_workspace.tar.zst
+
+      - name: 覆盖同 key 的 prepared-workspace 缓存
+        if: ${{ always() && steps.gate.outputs.need_sync == 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_KEY: ${{ env.PREPARED_KEY }}
+        run: |
+          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
+            echo "已删除旧的 prepared-workspace 缓存: $CACHE_KEY"
+          else
+            echo "旧的 prepared-workspace 缓存不存在，直接保存新缓存"
+          fi
+
+      - name: 保存 prepared-workspace 缓存
+        if: ${{ always() && steps.gate.outputs.need_sync == 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace.tar.zst
+          key: ${{ env.PREPARED_KEY }}
+
+      - name: 校验 tarball 已就绪
+        run: |
+          if [ ! -s "$GITHUB_WORKSPACE/kernel_workspace.tar.zst" ]; then
+            echo "::error::kernel_workspace.tar.zst 不存在或为空"
+            exit 1
+          fi
+          ls -lh "$GITHUB_WORKSPACE/kernel_workspace.tar.zst"
 
       - name: 上传 workspace artifact
         uses: actions/upload-artifact@v7
