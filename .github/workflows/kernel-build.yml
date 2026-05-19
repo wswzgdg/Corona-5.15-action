@@ -228,9 +228,19 @@ jobs:
         if: ${{ always() }}
         id: cur_rate
         run: |
-          STATS="$(ccache -s 2>/dev/null || true)"
-          HITS="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Hits:/ {print $2; exit}')"
-          TOTAL="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Cacheable calls:/ {print $3; exit}')"
+          HITS=""
+          TOTAL=""
+          if PRINT_STATS="$(ccache --print-stats 2>/dev/null)" && [ -n "$PRINT_STATS" ]; then
+            HITS="$(printf '%s\n' "$PRINT_STATS" | awk '$1=="cache_hit_direct"||$1=="cache_hit_preprocessed"{s+=$2} END{print s+0}')"
+            MISS="$(printf '%s\n' "$PRINT_STATS" | awk '$1=="cache_miss"{print $2; exit}')"
+            [ -n "$MISS" ] || MISS=0
+            TOTAL=$((HITS + MISS))
+          fi
+          if [ -z "$HITS" ] || [ -z "$TOTAL" ] || [ "$TOTAL" = "0" ]; then
+            STATS="$(ccache -s 2>/dev/null || true)"
+            HITS="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Hits:/ {print $2; exit}')"
+            TOTAL="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Cacheable calls:/ {print $3; exit}')"
+          fi
           if [ -z "$HITS" ] || [ -z "$TOTAL" ] || [ "$TOTAL" = "0" ]; then
             RATE="0"
           else
