@@ -254,6 +254,18 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+      - name: 清理上次 run 的 common ccache
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMON_KEY: ccache-ecsv3-5.15-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-common
+        run: |
+          if gh cache delete "$COMMON_KEY" -R "${{ github.repository }}"; then
+            echo "已删除上次 run 的 common ccache: $COMMON_KEY"
+          else
+            echo "上次 common ccache 不存在，无需清理"
+          fi
+
   build:
     needs: [count-builds, prepare-source]
     if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') }}

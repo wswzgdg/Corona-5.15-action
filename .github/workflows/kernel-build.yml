@@ -96,15 +96,17 @@ jobs:
         shell: bash
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      OWN_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
+      COMMON_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-common
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: 配置 ccache
         run: |
-          echo "CCACHE_DIR=$HOME/.ccache_5.15" >> $GITHUB_ENV
-          echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
-          mkdir -p $HOME/.ccache_5.15
+          echo "CCACHE_DIR=$HOME/.ccache_5.15" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=5G" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.ccache_5.15"
 
       - name: 下载预备 workspace
         if: ${{ inputs.use_prepared_source }}
@@ -121,40 +123,52 @@ jobs:
           rm -f kernel_workspace.tar.zst
           ls -la kernel_workspace
 
-      - name: 载入 ccache 缓存
+      - name: 载入 own ccache 缓存
         uses: actions/cache/restore@v5
-        id: ccache-restore
+        id: ccache-own
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
-          restore-keys: |
-            ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
-            ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-
-            ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-
-            ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-
-            ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-
+          key: ${{ env.OWN_KEY }}
+
+      - name: 载入 common ccache 缓存
+        if: ${{ steps.ccache-own.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v5
+        id: ccache-common
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.COMMON_KEY }}
 
       - name: 拉取公共预置 ccache 缓存
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "检查本地缓存状态..."
           if [ -d "$CCACHE_DIR" ] && [ "$(ls -A "$CCACHE_DIR" 2>/dev/null)" ]; then
-            echo "检测到本地已成功载入 ccache 缓存，跳过公共 ccache 拉取！"
+            echo "已命中 own/common 缓存，跳过 public 拉取"
             exit 0
           fi
-
-          echo "未命中缓存，尝试拉取最新公共 ccache ..."
+          echo "own/common 均未命中，尝试拉取最新 public ccache ..."
           mkdir -p "$CCACHE_DIR"
           FILE_NAME="ccache-5.15.tar.zst"
-
           if gh release download -p "$FILE_NAME" -R cctv18/public_ccache; then
             echo "成功下载 $FILE_NAME，正在解压..."
             tar -I zstd -xf "$FILE_NAME" -C "$CCACHE_DIR"
-            echo "公共 ccache 恢复完成！"
+            rm -f "$FILE_NAME"
+            echo "public ccache 恢复完成"
           else
-            echo "公共 ccache 中未找到对应的 ccache 文件，将进行全量全新编译..."
+            echo "public ccache 不存在，将进行全新编译"
           fi
+
+      - name: 读取上次命中率基线
+        id: prev_rate
+        run: |
+          if [ -f "$CCACHE_DIR/.prev_hit_rate.txt" ]; then
+            VAL="$(cat "$CCACHE_DIR/.prev_hit_rate.txt" 2>/dev/null || echo 0)"
+          else
+            VAL="0"
+          fi
+          [ -n "$VAL" ] || VAL="0"
+          echo "上次 own 缓存命中率基线: $VAL%"
+          echo "value=$VAL" >> "$GITHUB_OUTPUT"
 
       - name: 准备工具链
         env:
@@ -178,7 +192,7 @@ jobs:
           ccache -M ${{ env.CCACHE_MAXSIZE }}
           ccache -o compression=true
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
-          echo "ccache初始状态:"
+          echo "ccache 初始状态:"
           ccache -s
 
       - name: 编译内核
@@ -207,34 +221,81 @@ jobs:
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
           chmod +x .github/workflows/all_managers/common.sh
           .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}" "${{ inputs.use_kpn && 'true' || 'false' }}" "${{ inputs.version_name }}"
-          echo "ccache状态："
+          echo "ccache 状态："
           ccache -s
 
-      - name: 覆盖同 key 的 ccache 缓存
-        if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
+      - name: 计算本次命中率
+        if: ${{ always() }}
+        id: cur_rate
+        run: |
+          STATS="$(ccache -s 2>/dev/null || true)"
+          HITS="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Hits:/ {print $2; exit}')"
+          TOTAL="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Cacheable calls:/ {print $3; exit}')"
+          if [ -z "$HITS" ] || [ -z "$TOTAL" ] || [ "$TOTAL" = "0" ]; then
+            RATE="0"
+          else
+            RATE="$(awk -v h="$HITS" -v t="$TOTAL" 'BEGIN{ printf "%.2f", h*100/t }')"
+          fi
+          echo "本次命中率: $RATE% (hits=$HITS / total=$TOTAL)"
+          echo "value=$RATE" >> "$GITHUB_OUTPUT"
+          printf '%s' "$RATE" > "$CCACHE_DIR/.prev_hit_rate.txt"
+
+      - name: 决定 own 缓存写入策略
+        if: ${{ always() && steps.compile.outcome == 'success' }}
+        id: own_decision
+        env:
+          PREV: ${{ steps.prev_rate.outputs.value }}
+          CUR: ${{ steps.cur_rate.outputs.value }}
+          OWN_HIT: ${{ steps.ccache-own.outputs.cache-hit }}
+          FORCE_UPDATE: ${{ inputs.ccache_update }}
+        run: |
+          DECISION="skip"
+          REASON=""
+          if [ "$FORCE_UPDATE" = "true" ]; then
+            DECISION="overwrite"
+            REASON="ccache_update=true"
+          elif [ "$OWN_HIT" != "true" ]; then
+            DECISION="save"
+            REASON="own 缓存首次写入"
+          else
+            CMP="$(awk -v p="$PREV" -v c="$CUR" 'BEGIN{ if (c+0 > p+0) print "gt"; else print "le" }')"
+            if [ "$CMP" = "gt" ]; then
+              DECISION="overwrite"
+              REASON="本次命中率 $CUR% > 上次 $PREV%"
+            else
+              REASON="本次命中率 $CUR% 未优于上次 $PREV%，保留旧 own 缓存"
+            fi
+          fi
+          echo "own 写入决定: $DECISION ($REASON)"
+          echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
+
+      - name: 删除旧 own 缓存
+        if: ${{ always() && steps.own_decision.outputs.decision == 'overwrite' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CACHE_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
         run: |
-          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
-            echo "已删除旧的 ccache 缓存: $CACHE_KEY"
+          if gh cache delete "$OWN_KEY" -R "${{ github.repository }}"; then
+            echo "已删除旧 own 缓存: $OWN_KEY"
           else
-            echo "旧的 ccache 缓存不存在，直接保存新缓存"
+            echo "旧 own 缓存不存在，直接保存"
           fi
 
-      - name: 确保 ccache 目录存在
-        if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
-        continue-on-error: true
-        run: mkdir -p "$CCACHE_DIR"
-
-      - name: 保存 ccache 缓存
-        if: ${{ always() && (inputs.ccache_update || steps.ccache-restore.outputs.cache-hit != 'true') }}
+      - name: 保存 own ccache 缓存
+        if: ${{ always() && (steps.own_decision.outputs.decision == 'save' || steps.own_decision.outputs.decision == 'overwrite') }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
+          key: ${{ env.OWN_KEY }}
+
+      - name: 保存 common ccache 缓存
+        if: ${{ always() && steps.compile.outcome == 'success' && inputs.use_prepared_source }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ env.COMMON_KEY }}
 
       - name: 记录 clang 版本元数据
         if: ${{ always() }}
