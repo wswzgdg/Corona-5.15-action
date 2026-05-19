@@ -66,6 +66,11 @@ on:
         required: false
         type: boolean
         default: false
+      use_prepared_source:
+        description: '是否使用 prepare-source 预备好的 workspace artifact'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-kernel:
@@ -117,6 +122,7 @@ jobs:
             clang23-apt-v3-${{ runner.os }}
 
       - name: 载入 repo 缓存
+        if: ${{ !inputs.use_prepared_source }}
         uses: actions/cache/restore@v5
         id: repo-restore
         with:
@@ -124,6 +130,23 @@ jobs:
           key: repo-${{ runner.os }}-${{ github.ref_name }}
           restore-keys: |
             repo-${{ runner.os }}-
+
+      - name: 下载预备 workspace
+        if: ${{ inputs.use_prepared_source }}
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-workspace
+          path: ${{ github.workspace }}
+
+      - name: 解压预备 workspace
+        if: ${{ inputs.use_prepared_source }}
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq --no-install-recommends zstd
+          cd ${{ github.workspace }}
+          tar -I 'zstd -T0' -xf kernel_workspace.tar.zst
+          rm -f kernel_workspace.tar.zst
+          ls -la kernel_workspace
 
       - name: 载入 ccache 缓存
         uses: actions/cache/restore@v5
@@ -237,6 +260,7 @@ jobs:
           BUILD_SUSFS_MODE: ${{ inputs.susfs_mode }}
           CLANG_VERSION: ${{ inputs.clang_version }}
           SKIP_APT: '1'
+          SKIP_SOURCE_PREP: ${{ inputs.use_prepared_source && '1' || '' }}
           CCACHE_LOGFILE: ${{ github.workspace }}/kernel_workspace/ccache.log
           CCACHE_COMPILERCHECK: none
           CCACHE_BASEDIR: ${{ github.workspace }}
@@ -313,7 +337,7 @@ jobs:
           printf '%s' "$CLANG_LABEL_VERSION" > "${{ github.workspace }}/clang_meta/${{ inputs.manager }}.txt"
 
       - name: 覆盖同 key 的 repo 缓存
-        if: ${{ always() }}
+        if: ${{ always() && !inputs.use_prepared_source }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -326,7 +350,7 @@ jobs:
           fi
 
       - name: 保存 repo 缓存
-        if: ${{ always() }}
+        if: ${{ always() && !inputs.use_prepared_source }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:

@@ -42,55 +42,62 @@ if [ -z "${SKIP_APT:-}" ]; then
   ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
 fi
 
-if [ ! -d .repo ]; then
-  echo "初始化源码仓库..."
-  if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-    MANIFEST_XML="oneplus_ace3_v.xml"
+if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
+  if [ ! -d .repo ]; then
+    echo "初始化源码仓库..."
+    if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+      MANIFEST_XML="oneplus_ace3_v.xml"
+    else
+      MANIFEST_XML="oneplus_ace3_b.xml"
+    fi
+    repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m "$MANIFEST_XML" --no-tags --depth=1
   else
-    MANIFEST_XML="oneplus_ace3_b.xml"
+    echo "复用已有源码仓库..."
   fi
-  repo init -u https://github.com/Numbersf/kernel_manifest -b oneplus/sm8550 -m "$MANIFEST_XML" --no-tags --depth=1
-else
-  echo "复用已有源码仓库..."
-fi
-REPO_LAUNCHER="$PWD/.repo/repo/repo"
-# 优先使用仓库内 repo init 拉下来的 launcher，找不到时再退回系统 repo 命令
-if [ -x "$REPO_LAUNCHER" ]; then
-  "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
-else
-  repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
-fi
+  REPO_LAUNCHER="$PWD/.repo/repo/repo"
+  # 优先使用仓库内 repo init 拉下来的 launcher，找不到时再退回系统 repo 命令
+  if [ -x "$REPO_LAUNCHER" ]; then
+    "$REPO_LAUNCHER" sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
+  else
+    repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
+  fi
 
-cd kernel_platform
-rm -rf common AnyKernel3
-rm -rf "$WORKDIR/out_zips"
-if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-  COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
-  COMMON_BRANCH="Corona"
-else
-  COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
-  COMMON_BRANCH="android13-5.15-lts"
-fi
-# 有 token 时改用带鉴权地址，避免私有/限流场景下 clone 失败
-if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
-  COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/${COMMON_REPO}.git"
-else
-  COMMON_URL="https://github.com/${COMMON_REPO}.git"
-fi
-git clone --depth=1 "$COMMON_URL" -b "$COMMON_BRANCH" common
-cd ../
+  cd kernel_platform
+  rm -rf common AnyKernel3
+  rm -rf "$WORKDIR/out_zips"
+  if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+    COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
+    COMMON_BRANCH="Corona"
+  else
+    COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
+    COMMON_BRANCH="android13-5.15-lts"
+  fi
+  # 有 token 时改用带鉴权地址，避免私有/限流场景下 clone 失败
+  if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
+    COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/${COMMON_REPO}.git"
+  else
+    COMMON_URL="https://github.com/${COMMON_REPO}.git"
+  fi
+  git clone --depth=1 "$COMMON_URL" -b "$COMMON_BRANCH" common
+  cd ../
 
-# toolchain (reuse to save space)
-ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
+  # toolchain (reuse to save space)
+  ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
 
-# prep common
-cd kernel_platform
-rm common/android/abi_gki_protected_exports_* || true
-# 去掉 -dirty，避免源码目录状态把额外后缀带进最终内核版本字符串
-for f in common/scripts/setlocalversion; do
-  sed -i 's/ -dirty//g' "$f"
-  sed -i '$i res=$(echo "$res" | sed '''s/-dirty//g''')' "$f"
+  # prep common
+  cd kernel_platform
+  rm common/android/abi_gki_protected_exports_* || true
+  # 去掉 -dirty，避免源码目录状态把额外后缀带进最终内核版本字符串
+  for f in common/scripts/setlocalversion; do
+    sed -i 's/ -dirty//g' "$f"
+    sed -i '$i res=$(echo "$res" | sed '''s/-dirty//g''')' "$f"
   done
+else
+  echo "复用预置 workspace，跳过 repo sync 与 common clone"
+  ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
+  rm -rf "$WORKDIR/out_zips"
+  cd kernel_platform
+fi
 
 # setup manager
 cd common

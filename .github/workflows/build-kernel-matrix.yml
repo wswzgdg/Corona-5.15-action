@@ -100,7 +100,118 @@ on:
         default: false
 
 jobs:
+  count-builds:
+    runs-on: ubuntu-latest
+    outputs:
+      total: ${{ steps.count.outputs.total }}
+      use_prepared: ${{ steps.count.outputs.use_prepared }}
+    steps:
+      - name: 计算实际编译数
+        id: count
+        env:
+          B_RESUKISU: ${{ inputs.build_resukisu }}
+          B_SUKISU: ${{ inputs.build_sukisu }}
+          B_KSUNEXT: ${{ inputs.build_ksunext }}
+          B_KSU: ${{ inputs.build_ksu }}
+          B_KOWSU: ${{ inputs.build_kowsu }}
+          B_NONE: ${{ inputs.build_none }}
+          B_SUSFS: ${{ inputs.build_susfs }}
+        run: |
+          total=0
+          # 各管理器按 susfs 模式扩展矩阵：all=2，true/false=1（none 永远只有 1 项）
+          if [ "$B_SUSFS" = "all" ]; then mgr_factor=2; else mgr_factor=1; fi
+          for var in B_RESUKISU B_SUKISU B_KSUNEXT B_KSU B_KOWSU; do
+            if [ "${!var}" = "true" ]; then total=$((total + mgr_factor)); fi
+          done
+          if [ "$B_NONE" = "true" ]; then total=$((total + 1)); fi
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          # 编译数 ≥ 3 时启用前置 prepare-source，否则直接走原流程
+          if [ "$total" -ge 3 ]; then
+            echo "use_prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "use_prepared=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "本次共需编译 $total 个矩阵项，use_prepared=$( [ $total -ge 3 ] && echo true || echo false )"
+
+  prepare-source:
+    needs: count-builds
+    if: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: 载入 repo 缓存
+        uses: actions/cache/restore@v5
+        id: repo-restore
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/.repo
+          key: repo-${{ runner.os }}-${{ github.ref_name }}
+          restore-keys: |
+            repo-${{ runner.os }}-
+
+      - name: 安装 repo 依赖
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            git python3 python-is-python3 curl ca-certificates zstd repo
+          sudo curl -sSL https://storage.googleapis.com/git-repo-downloads/repo -o /usr/bin/repo
+          sudo chmod +x /usr/bin/repo
+
+      - name: 同步源码
+        env:
+          KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
+          ANDROID_RELEASE: ${{ inputs.android_release }}
+        run: |
+          chmod +x .github/workflows/all_managers/prepare_source.sh
+          .github/workflows/all_managers/prepare_source.sh
+
+      - name: 覆盖同 key 的 repo 缓存
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_KEY: repo-${{ runner.os }}-${{ github.ref_name }}
+        run: |
+          if gh cache delete "$CACHE_KEY" -R "${{ github.repository }}"; then
+            echo "已删除旧的 repo 缓存: $CACHE_KEY"
+          else
+            echo "旧的 repo 缓存不存在，直接保存新缓存"
+          fi
+
+      - name: 保存 repo 缓存
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/.repo
+          key: repo-${{ runner.os }}-${{ github.ref_name }}
+
+      - name: 打包 workspace
+        run: |
+          cd ${{ github.workspace }}
+          # .repo 已通过 actions/cache 走另一条路径，artifact 里不带，避免膨胀和重复
+          tar --exclude='kernel_workspace/.repo' \
+              -I 'zstd -T0 -3' \
+              -cf kernel_workspace.tar.zst kernel_workspace
+          ls -lh kernel_workspace.tar.zst
+
+      - name: 上传 workspace artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: prepared-workspace
+          path: ${{ github.workspace }}/kernel_workspace.tar.zst
+          retention-days: 1
+          compression-level: 0
+
   build:
+    needs: [count-builds, prepare-source]
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') }}
     permissions:
       actions: write
       contents: read
@@ -129,6 +240,8 @@ jobs:
       version_name: ${{ inputs.version_name }}
       android_release: ${{ inputs.android_release }}
       clang_version: ${{ inputs.clang_version }}
+      # 编译数 ≥ 3 时所有 build 都拿前置 artifact，跳过 repo sync
+      use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
       # 这里根据 workflow_dispatch 的勾选结果决定当前矩阵项是否真正执行
       build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
     secrets: inherit
