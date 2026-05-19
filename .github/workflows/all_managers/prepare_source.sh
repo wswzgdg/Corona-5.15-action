@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-# 与 common.sh 共享前期源码准备阶段：repo init/sync + common clone + setlocalversion 修补。
-# 当矩阵编译数较多时，前置 prepare-source 工作流跑一次后将整个 kernel_workspace 上传成
-# artifact，之后所有 build 矩阵项直接下载解压，避免每个任务重复同步源码。
+# 前置 prepare-source 工作流的源码同步阶段：只做 repo init / repo sync。
+# common（私有 kernel_common_oplus）必须留到 build 阶段再 clone，否则会随 artifact
+# 暴露给公开仓库的访客；setlocalversion 修补、abi 清理同样放到 build 阶段。
 
 WORKDIR="$(pwd)"
 
@@ -28,29 +28,8 @@ else
   repo sync -j$(nproc --all) -c --no-tags --no-clone-bundle --optimized-fetch --prune
 fi
 
+# 顺手清掉 manifest 里同样会被 build 重新克隆的目录，缩小 artifact 体积
 cd kernel_platform
 rm -rf common AnyKernel3
-if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-  COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
-  COMMON_BRANCH="Corona"
-else
-  COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
-  COMMON_BRANCH="android13-5.15-lts"
-fi
-COMMON_URL_PUBLIC="https://github.com/${COMMON_REPO}.git"
-if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
-  COMMON_URL_AUTH="https://${KERNEL_COMMON_TOKEN}@github.com/${COMMON_REPO}.git"
-else
-  COMMON_URL_AUTH="$COMMON_URL_PUBLIC"
-fi
-git clone --depth=1 "$COMMON_URL_AUTH" -b "$COMMON_BRANCH" common
-# artifact 会被下载到其它 job，确保 .git/config 内不包含鉴权 URL
-git -C common remote set-url origin "$COMMON_URL_PUBLIC"
 
-rm common/android/abi_gki_protected_exports_* || true
-for f in common/scripts/setlocalversion; do
-  sed -i 's/ -dirty//g' "$f"
-  sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
-done
-
-echo "源码 workspace 已准备完成"
+echo "源码 workspace 已准备完成（不含 common）"

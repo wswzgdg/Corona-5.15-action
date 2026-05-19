@@ -93,10 +93,30 @@ if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
     sed -i '$i res=$(echo "$res" | sed '''s/-dirty//g''')' "$f"
   done
 else
-  echo "复用预置 workspace，跳过 repo sync 与 common clone"
+  echo "复用预置 workspace，跳过 repo sync"
   ensure_toolchain "$LLVM_CLANG_VERSION" "$WORKDIR"
   rm -rf "$WORKDIR/out_zips"
   cd kernel_platform
+  rm -rf common AnyKernel3
+  # common（私有仓库）一定要在 build 阶段才 clone，避免被 prepare 阶段 artifact 泄露
+  if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
+    COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
+    COMMON_BRANCH="Corona"
+  else
+    COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
+    COMMON_BRANCH="android13-5.15-lts"
+  fi
+  if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
+    COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/${COMMON_REPO}.git"
+  else
+    COMMON_URL="https://github.com/${COMMON_REPO}.git"
+  fi
+  git clone --depth=1 "$COMMON_URL" -b "$COMMON_BRANCH" common
+  rm common/android/abi_gki_protected_exports_* || true
+  for f in common/scripts/setlocalversion; do
+    sed -i 's/ -dirty//g' "$f"
+    sed -i '$i res=$(echo "$res" | sed '''s/-dirty//g''')' "$f"
+  done
 fi
 
 # setup manager
