@@ -418,8 +418,10 @@ def append_manager_section(lines, current_meta, previous_meta):
 
 
 def append_hidden_meta(lines, current_meta):
-    """Persist the current snapshot for the next release diff (incl. prereleases)."""
-    lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
+    """Persist the current snapshot for the next stable release diff."""
+    is_prerelease = env_flag('IS_PRERELEASE', default=False)
+    if not is_prerelease:
+        lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
 
 
 def build_release_lines(previous_meta, current_meta):

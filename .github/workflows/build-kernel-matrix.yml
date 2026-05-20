@@ -353,7 +353,7 @@ jobs:
                 repo: context.repo.repo,
                 per_page: 20,
               });
-              const stable = releases.find(r => !r.draft);
+              const stable = releases.find(r => !r.prerelease && !r.draft);
               if (!stable) {
                 core.setOutput('body_b64', '');
                 return;
