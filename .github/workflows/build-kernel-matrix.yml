@@ -46,6 +46,23 @@ on:
           - 'false'
           - 'true'
           - 'all'
+      clang_version:
+        description: "LLVM/Clang 版本"
+        required: false
+        type: choice
+        options:
+          - '14'
+          - '22'
+          - '23'
+        default: '23'
+      android_release:
+        description: "Android 版本"
+        required: true
+        type: choice
+        options:
+          - '15'
+          - '16'
+        default: '16'
       droidspaces_enable:
         description: "启用 Droidspaces 容器支持"
         required: true
@@ -70,38 +87,21 @@ on:
         required: false
         type: boolean
         default: false
+      pre_release:
+        description: "作为预发布"
+        required: false
+        type: boolean
+        default: true
       version_name:
         description: "KSU 版本名主体"
         required: false
         type: string
         default: "SEX"
-      android_release:
-        description: "Android 版本"
-        required: true
-        type: choice
-        options:
-          - '15'
-          - '16'
-        default: '16'
-      clang_version:
-        description: "LLVM/Clang 版本"
-        required: false
-        type: choice
-        options:
-          - '14'
-          - '22'
-          - '23'
-        default: '23'
       kernel_suffix:
         description: "设置内核后缀"
         required: false
         type: string
         default: ""
-      pre_release:
-        description: "作为预发布"
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   count-builds:
