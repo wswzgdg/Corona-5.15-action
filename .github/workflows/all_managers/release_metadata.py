@@ -395,14 +395,7 @@ def append_ak3_section(lines, current_meta, previous_meta):
         elif prev_repo and prev_repo.get('commit') and prev_repo.get('commit') == repo.get('commit'):
             lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
         else:
-            recent_commits = list_recent_commits(repo['remote'], repo['branch'], limit=15)
-            if recent_commits:
-                lines.append(f"**{repo['label']}**")
-                append_rendered_commits(lines, repo['remote'], recent_commits)
-            else:
-                rendered = render_hash_line(repo['label'], repo, prev_repo)
-                if rendered:
-                    lines.append(rendered)
+            lines.append(f"- {repo.get('label', 'AK3')}: 无修改")
     lines.append('')
 
 
@@ -425,10 +418,8 @@ def append_manager_section(lines, current_meta, previous_meta):
 
 
 def append_hidden_meta(lines, current_meta):
-    """Persist the current snapshot for the next stable release diff."""
-    is_prerelease = env_flag('IS_PRERELEASE', default=False)
-    if not is_prerelease:
-        lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
+    """Persist the current snapshot for the next release diff (incl. prereleases)."""
+    lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
 
 
 def build_release_lines(previous_meta, current_meta):
