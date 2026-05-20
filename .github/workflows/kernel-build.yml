@@ -22,7 +22,7 @@ on:
         type: string
         default: 'false'
       susfs_mode:
-        description: 'SUSFS 模式 (false/true/all)，仅用于命名'
+        description: 'SUSFS 模式 (false/true/both)，仅用于命名'
         required: false
         type: string
         default: ''
@@ -329,12 +329,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ format('ak3-{0}{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, (inputs.susfs_mode == 'all' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
+          name: ${{ format('ak3-{0}{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, (inputs.susfs_mode == 'both' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
           path: ${{ github.workspace }}/out_zips/AK3-*.zip
 
       - name: 上传 clang 元数据工件
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ format('clang-meta-{0}{1}', inputs.manager, (inputs.susfs_mode == 'all' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
+          name: ${{ format('clang-meta-{0}{1}', inputs.manager, (inputs.susfs_mode == 'both' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
           path: ${{ github.workspace }}/clang_meta/${{ inputs.manager }}.txt

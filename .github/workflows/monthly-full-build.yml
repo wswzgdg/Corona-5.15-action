@@ -27,7 +27,7 @@ jobs:
             -f build_ksu=true \
             -f build_kowsu=true \
             -f build_none=true \
-            -f build_susfs=all \
+            -f build_susfs=both \
             -f droidspaces_enable=extend \
             -f ccache_update=true \
             -f refresh_source=true

@@ -45,7 +45,7 @@ on:
         options:
           - 'false'
           - 'true'
-          - 'all'
+          - 'both'
       clang_version:
         description: "LLVM/Clang 版本"
         required: false
@@ -122,7 +122,7 @@ jobs:
           B_SUSFS: ${{ inputs.build_susfs }}
         run: |
           total=0
-          if [ "$B_SUSFS" = "all" ]; then mgr_factor=2; else mgr_factor=1; fi
+          if [ "$B_SUSFS" = "both" ]; then mgr_factor=2; else mgr_factor=1; fi
           for var in B_RESUKISU B_SUKISU B_KSUNEXT B_KSU B_KOWSU; do
             if [ "${!var}" = "true" ]; then total=$((total + mgr_factor)); fi
           done
@@ -278,7 +278,7 @@ jobs:
       fail-fast: false
       matrix:
         manager: [none, resukisu, sukisu, ksunext, ksu, kowsu]
-        susfs: ${{ inputs.build_susfs == 'all' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
         exclude:
           - manager: none
             susfs: true
@@ -394,7 +394,7 @@ jobs:
           PRERELEASE_FLAG: ${{ inputs.pre_release && '--prerelease' || '' }}
         run: |
           CLANG_LABEL="$(cat ./clang_version_label.txt 2>/dev/null || printf 'unknown')"
-          SUSFS_LABEL="${{ inputs.build_susfs == 'all' && 'both' || (inputs.build_susfs == 'true' && 'on' || 'off') }}"
+          SUSFS_LABEL="${{ inputs.build_susfs == 'both' && 'both' || (inputs.build_susfs == 'true' && 'on' || 'off') }}"
           DROIDSPACES_LABEL="${{ inputs.droidspaces_enable }}"
           PREFIX="${{ inputs.pre_release == true && '预发布 | ' || '' }}"
           RELEASE_NAME="${PREFIX}全量构建 #${{ github.run_number }} | A${{ inputs.android_release }} | susfs:${SUSFS_LABEL} | ds:${DROIDSPACES_LABEL} | clang:${CLANG_LABEL}"
