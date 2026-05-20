@@ -291,7 +291,7 @@ CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
 prepare_anykernel_tree "$MANAGER" "$USE_KPN" "$AK3_URL" "$CORONA_URL"
 mkdir -p "$WORKDIR/out_zips"
 SUSFS_PKG_LABEL=""
-if [ "${BUILD_SUSFS_MODE:-}" = "all" ] && [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ]; then
+if [ "${BUILD_SUSFS_MODE:-}" = "both" ] && [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ]; then
   SUSFS_PKG_LABEL="SUSFS"
 fi
 package_anykernel_zip "$MANAGER" "$KERNEL_VERSION" "./common/out/arch/arm64/boot/Image" "$WORKDIR/out_zips" "noksu" "$SUSFS_PKG_LABEL" >/dev/null
