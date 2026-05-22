@@ -199,6 +199,7 @@ jobs:
         id: compile
         continue-on-error: true
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
           ANDROID_VERSION: android13
@@ -299,8 +300,9 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ env.OWN_KEY }}
 
+      # 仅 none manager 写 common 缓存，避免多个矩阵 job 并发抢占同一 key
       - name: 保存 common ccache 缓存
-        if: ${{ always() && steps.compile.outcome == 'success' && inputs.use_prepared_source }}
+        if: ${{ always() && steps.compile.outcome == 'success' && inputs.use_prepared_source && inputs.manager == 'none' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:

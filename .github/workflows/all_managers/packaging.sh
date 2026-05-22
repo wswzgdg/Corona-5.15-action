@@ -34,10 +34,33 @@ prepare_anykernel_tree() {
   elif [ "$use_kpn" != "true" ] && { [ "$manager" = "sukisu" ] || [ "$manager" = "resukisu" ]; }; then
     git clone -b kpm "$ak3_url" --depth=1 AnyKernel3
     mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
-    local patch_url
-    patch_url=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest | python3 -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); matches=[a["browser_download_url"] for a in assets if "patch_android" in a.get("name", "")]; print(matches[0] if matches else "")')
-    [ -n "$patch_url" ] || { echo "未找到 patch_android release 资源"; return 1; }
-    curl -fL "$patch_url" -o ./AnyKernel3/patch/patch
+    local patch_url=""
+    local api_resp=""
+    local auth_args=()
+    [ -n "${GITHUB_TOKEN:-}" ] && auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+    for attempt in 1 2 3 4 5; do
+      api_resp=$(curl -fsSL --retry 3 --retry-delay 5 \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        "${auth_args[@]}" \
+        https://api.github.com/repos/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest || true)
+      patch_url=$(printf '%s' "$api_resp" | python3 -c 'import json,sys
+try:
+  data=json.load(sys.stdin)
+except Exception:
+  sys.exit(0)
+assets=data.get("assets", []) if isinstance(data,dict) else []
+matches=[a.get("browser_download_url","") for a in assets if "patch_android" in a.get("name","")]
+print(matches[0] if matches else "")')
+      [ -n "$patch_url" ] && break
+      echo "patch_android 资源解析失败，第 ${attempt} 次重试..." >&2
+      sleep $((attempt * 5))
+    done
+    if [ -z "$patch_url" ]; then
+      echo "API 受限，回退到 release 直链下载 patch_android" >&2
+      patch_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_android"
+    fi
+    curl -fL --retry 3 --retry-delay 5 "$patch_url" -o ./AnyKernel3/patch/patch
   else
     git clone -b main "$ak3_url" --depth=1 AnyKernel3
     mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
