@@ -230,12 +230,15 @@ if [ "${DROIDSPACES_ENABLE:-true}" = "true" ]; then
     patch -p1 -F 3 < "$p" -d ./common || true
   done
   DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
-  # 应用 NTSync 补丁；如 gki_defconfig 已含 CONFIG_NTSYNC=y 则视为内核已自带，跳过补丁与写入
-  if grep -q "^CONFIG_NTSYNC=y" "$DEFCONFIG"; then
-    echo "gki_defconfig 已含 CONFIG_NTSYNC=y，跳过 NTSync 补丁"
+  # 应用 NTSync 补丁：源码已含 ntsync.c 则视为驱动已自带，跳过补丁；
+  # 配置开关与补丁解耦，确保 gki_defconfig 始终含 CONFIG_NTSYNC=y。
+  if [ -f ./common/drivers/misc/ntsync.c ]; then
+    echo "common 源码已含 ntsync.c，跳过 NTSync 补丁"
   else
     wget "$REPO_URL/ntsync_compat_android13-5.15.patch" -O ntsync_compat.patch
     patch -p1 -F 3 < ntsync_compat.patch -d ./common || true
+  fi
+  if ! grep -q "^CONFIG_NTSYNC=y" "$DEFCONFIG"; then
     echo "CONFIG_NTSYNC=y" >> "$DEFCONFIG"
   fi
   # 开启 Droidspaces 容器所需内核配置
