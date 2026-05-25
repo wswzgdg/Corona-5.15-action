@@ -19,8 +19,8 @@ on:
       droidspaces_enable:
         description: '是否启用 Droidspaces 容器支持'
         required: false
-        type: string
-        default: 'false'
+        type: boolean
+        default: true
       susfs_mode:
         description: 'SUSFS 模式 (false/true/both)，仅用于命名'
         required: false
@@ -96,7 +96,7 @@ jobs:
         shell: bash
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      OWN_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable != 'false' && 'droidspaces' || 'none' }}-${{ inputs.manager }}
+      OWN_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable && 'droidspaces' || 'none' }}-${{ inputs.manager }}
       COMMON_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-common
     steps:
       - name: Checkout

@@ -217,7 +217,7 @@ sed -i 's/check_defconfig//' ./common/build.config.gki
 touch ./common/.scmversion
 
 # Droidspaces 容器支持
-if [ "${DROIDSPACES_ENABLE:-false}" != "false" ]; then
+if [ "${DROIDSPACES_ENABLE:-true}" = "true" ]; then
   echo "正在启用 Droidspaces 容器支持..."
   REPO_URL="https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/droidspaces_patch"
   # 应用 OKI 5.15 Droidspaces 核心补丁
@@ -229,39 +229,37 @@ if [ "${DROIDSPACES_ENABLE:-false}" != "false" ]; then
     wget "$REPO_URL/$p" -O "$p"
     patch -p1 -F 3 < "$p" -d ./common || true
   done
-  # 应用 NTSync 补丁；如源码已含 ntsync.c 则跳过，避免 Kconfig/Makefile 条目重复
-  if [ -f ./common/drivers/misc/ntsync.c ]; then
-    echo "common 源码已含 ntsync.c，跳过 NTSync 补丁"
+  DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
+  # 应用 NTSync 补丁；如 gki_defconfig 已含 CONFIG_NTSYNC=y 则视为内核已自带，跳过补丁与写入
+  if grep -q "^CONFIG_NTSYNC=y" "$DEFCONFIG"; then
+    echo "gki_defconfig 已含 CONFIG_NTSYNC=y，跳过 NTSync 补丁"
   else
     wget "$REPO_URL/ntsync_compat_android13-5.15.patch" -O ntsync_compat.patch
     patch -p1 -F 3 < ntsync_compat.patch -d ./common || true
+    echo "CONFIG_NTSYNC=y" >> "$DEFCONFIG"
   fi
   # 开启 Droidspaces 容器所需内核配置
-  DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
-  echo "CONFIG_PID_NS=y" >> "$DEFCONFIG"
-  echo "CONFIG_IPC_NS=y" >> "$DEFCONFIG"
-  echo "CONFIG_UTS_NS=y" >> "$DEFCONFIG"
-  echo "CONFIG_USER_NS=y" >> "$DEFCONFIG"
+  # IPC
   echo "CONFIG_SYSVIPC=y" >> "$DEFCONFIG"
-  echo "CONFIG_DEVTMPFS=y" >> "$DEFCONFIG"
-  echo "CONFIG_NAMESPACES=y" >> "$DEFCONFIG"
   echo "CONFIG_POSIX_MQUEUE=y" >> "$DEFCONFIG"
+  # 命名空间
+  echo "CONFIG_IPC_NS=y" >> "$DEFCONFIG"
+  echo "CONFIG_PID_NS=y" >> "$DEFCONFIG"
+  # 硬件访问
+  echo "CONFIG_DEVTMPFS=y" >> "$DEFCONFIG"
+  # 网络（Docker/NAT 支持）
   echo "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y" >> "$DEFCONFIG"
+  # UFW 支持
+  echo "CONFIG_NETFILTER_XT_TARGET_REJECT=y" >> "$DEFCONFIG"
   echo "CONFIG_NETFILTER_XT_TARGET_LOG=y" >> "$DEFCONFIG"
   echo "CONFIG_NETFILTER_XT_MATCH_RECENT=y" >> "$DEFCONFIG"
-  echo "CONFIG_CGROUP_DEVICE=y" >> "$DEFCONFIG"
-  echo "CONFIG_CGROUP_PIDS=y" >> "$DEFCONFIG"
-  echo "CONFIG_MEMCG=y" >> "$DEFCONFIG"
-  echo "CONFIG_NTSYNC=y" >> "$DEFCONFIG"
-  if [ "$DROIDSPACES_ENABLE" = "extend" ]; then
-    echo "正在启用容器环境扩展支持..."
-    echo "CONFIG_BT_HCIVHCI=y" >> "$DEFCONFIG"
-    echo "CONFIG_STATIC_USERMODEHELPER=n" >> "$DEFCONFIG"
-    # 添加 Lindroid EVDI DRM 驱动
-    wget "$REPO_URL/evdi_drm.patch" -O evdi_drm.patch
-    patch -p1 -F 3 < evdi_drm.patch -d ./common || true
-    echo "CONFIG_DRM_LINDROID_EVDI=y" >> "$DEFCONFIG"
-  fi
+  # Fail2ban 支持
+  echo "CONFIG_IP_SET=y" >> "$DEFCONFIG"
+  echo "CONFIG_IP_SET_HASH_IP=y" >> "$DEFCONFIG"
+  echo "CONFIG_IP_SET_HASH_NET=y" >> "$DEFCONFIG"
+  echo "CONFIG_NETFILTER_XT_SET=y" >> "$DEFCONFIG"
+  # 在 tmpfs 上启用 xattr 支持（运行 NixOS 必备选项）
+  echo "CONFIG_TMPFS_XATTR=y" >> "$DEFCONFIG"
 fi
 
 # kernel suffix

@@ -66,12 +66,8 @@ on:
       droidspaces_enable:
         description: "启用 Droidspaces 容器支持"
         required: true
-        type: choice
-        default: 'false'
-        options:
-          - 'false'
-          - 'standard'
-          - 'extend'
+        type: boolean
+        default: true
       ccache_update:
         description: "更新 ccache 缓存"
         required: false
@@ -395,7 +391,7 @@ jobs:
         run: |
           CLANG_LABEL="$(cat ./clang_version_label.txt 2>/dev/null || printf 'unknown')"
           SUSFS_LABEL="${{ inputs.build_susfs == 'both' && 'both' || (inputs.build_susfs == 'true' && 'on' || 'off') }}"
-          DROIDSPACES_LABEL="${{ inputs.droidspaces_enable }}"
+          DROIDSPACES_LABEL="${{ inputs.droidspaces_enable && 'on' || 'off' }}"
           PREFIX="${{ inputs.pre_release == true && '预发布 | ' || '' }}"
           RELEASE_NAME="${PREFIX}全量构建 #${{ github.run_number }} | A${{ inputs.android_release }} | susfs:${SUSFS_LABEL} | ds:${DROIDSPACES_LABEL} | clang:${CLANG_LABEL}"
           gh release create "$TAG_NAME" ./release_zips/*.zip \
