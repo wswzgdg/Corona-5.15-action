@@ -260,21 +260,15 @@ jobs:
           OWN_HIT: ${{ steps.ccache-own.outputs.cache-hit }}
           FORCE_UPDATE: ${{ inputs.ccache_update }}
         run: |
-          DECISION="skip"
-          REASON=""
-          if [ "$FORCE_UPDATE" = "true" ]; then
-            DECISION="overwrite"
-            REASON="ccache_update=true"
-          elif [ "$OWN_HIT" != "true" ]; then
+          if [ "$OWN_HIT" != "true" ]; then
             DECISION="save"
             REASON="own 缓存首次写入"
           else
-            CMP="$(awk -v p="$PREV" -v c="$CUR" 'BEGIN{ if (c+0 > p+0) print "gt"; else print "le" }')"
-            if [ "$CMP" = "gt" ]; then
-              DECISION="overwrite"
-              REASON="本次命中率 $CUR% > 上次 $PREV%"
+            DECISION="overwrite"
+            if [ "$FORCE_UPDATE" = "true" ]; then
+              REASON="ccache_update=true"
             else
-              REASON="本次命中率 $CUR% 未优于上次 $PREV%，保留旧 own 缓存"
+              REASON="默认覆盖 (本次 $CUR% / 上次 $PREV%)"
             fi
           fi
           echo "own 写入决定: $DECISION ($REASON)"
