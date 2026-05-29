@@ -220,11 +220,11 @@ touch ./common/.scmversion
 if [ "${DROIDSPACES_ENABLE:-true}" = "true" ]; then
   echo "正在启用 Droidspaces 容器支持..."
   REPO_URL="https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/droidspaces_patch"
-  # 应用 OKI 5.15 Droidspaces 核心补丁
+  # 应用 OKI 5.10 Droidspaces 核心补丁
   for p in \
     01.disable_crc_checks_for_lkms.patch \
     02.fix_restore_cgroup_file_prefix_handling.patch \
-    "03.5.15+_use_android_abi_padding_for_posix_mqueue.patch" \
+    "03.5.10+_use_android_abi_padding_for_posix_mqueue.patch" \
     04.sysvipc_task_struct.patch; do
     wget "$REPO_URL/$p" -O "$p"
     patch -p1 -F 3 < "$p" -d ./common || true
