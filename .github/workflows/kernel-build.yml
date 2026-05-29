@@ -202,8 +202,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
-          ANDROID_VERSION: android13
-          KERNEL_VERSION: '5.15'
+          ANDROID_VERSION: android12
+          KERNEL_VERSION: '5.10'
           ANDROID_RELEASE: ${{ inputs.android_release }}
           DROIDSPACES_ENABLE: ${{ inputs.droidspaces_enable }}
           BUILD_SUSFS_MODE: ${{ inputs.susfs_mode }}

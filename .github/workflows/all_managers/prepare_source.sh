@@ -12,7 +12,7 @@ if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
 else
   VENDOR_BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
 fi
-VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
+VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8475"
 
 if [ ! -d kernel_workspace/.git ]; then
   rm -rf kernel_workspace

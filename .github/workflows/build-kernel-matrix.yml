@@ -2,7 +2,7 @@ name: 全量构建内核
 
 env:
   TZ: Asia/Shanghai
-  CCACHE_KEY: ccache-ecsv3-5.15
+  CCACHE_KEY: ccache-ecsv3-5.10
 
 on:
   workflow_dispatch:
@@ -142,12 +142,12 @@ jobs:
         id: h
         env:
           ANDROID_RELEASE: ${{ inputs.android_release }}
-          VENDOR_URL: https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550
+          VENDOR_URL: https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8475.git
         run: |
           if [ "$ANDROID_RELEASE" = "15" ]; then
-            BRANCH="oneplus/sm8550_v_15.0.0_oneplus11"
+            BRANCH="oneplus/sm8475_v_15.0.0_ace_2"
           else
-            BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
+            BRANCH="oneplus/sm8475_b_16.0.0_ace_2"
           fi
           VENDOR_SHA=$(git ls-remote "$VENDOR_URL" "$BRANCH" | awk 'NR==1{print $1}')
           if [ -z "$VENDOR_SHA" ]; then

@@ -42,11 +42,11 @@ fi
 
 if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
   if [ "${ANDROID_RELEASE:-16}" = "15" ]; then
-    VENDOR_BRANCH="oneplus/sm8550_v_15.0.0_oneplus11"
+    VENDOR_BRANCH="oneplus/sm8475_b_16.0.0_ace_2"
   else
-    VENDOR_BRANCH="oneplus/sm8550_b_16.0.0_oneplus_11"
+    VENDOR_BRANCH="oneplus/sm8475_v_16.0.0_ace_2"
   fi
-  VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550"
+  VENDOR_URL="https://github.com/OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8475.git"
   # vendor 仓库根目录就是 kernel_platform/ + vendor/，直接落到 kernel_workspace 即可
   if [ ! -d kernel_workspace/.git ]; then
     rm -rf kernel_workspace
@@ -63,8 +63,8 @@ if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
     COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
     COMMON_BRANCH="Corona"
   else
-    COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
-    COMMON_BRANCH="android13-5.15-lts"
+    COMMON_REPO="Corona-oplus-kernel/kernel_common_5.10"
+    COMMON_BRANCH="android12-5.10-lts"
   fi
   # 有 token 时改用带鉴权地址，避免私有/限流场景下 clone 失败
   if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
@@ -98,8 +98,8 @@ else
     COMMON_REPO="Corona-oplus-kernel/5.15oplus-c15"
     COMMON_BRANCH="Corona"
   else
-    COMMON_REPO="Corona-oplus-kernel/kernel_common_oplus"
-    COMMON_BRANCH="android13-5.15-lts"
+    COMMON_REPO="Corona-oplus-kernel/kernel_common_5.10"
+    COMMON_BRANCH="android12-5.10-lts"
   fi
   if [ -n "${KERNEL_COMMON_TOKEN:-}" ]; then
     COMMON_URL="https://${KERNEL_COMMON_TOKEN}@github.com/${COMMON_REPO}.git"
@@ -222,10 +222,8 @@ if [ "${DROIDSPACES_ENABLE:-true}" = "true" ]; then
   REPO_URL="https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/droidspaces_patch"
   # 应用 OKI 5.10 Droidspaces 核心补丁
   for p in \
-    01.disable_crc_checks_for_lkms.patch \
-    02.fix_restore_cgroup_file_prefix_handling.patch \
-    "03.5.10+_use_android_abi_padding_for_posix_mqueue.patch" \
-    04.sysvipc_task_struct.patch; do
+    OKI_5.10_posix.patch \
+    OKI-5.10-sysvipc_kabi_6_7_8.patch; do
     wget "$REPO_URL/$p" -O "$p"
     patch -p1 -F 3 < "$p" -d ./common || true
   done
@@ -235,7 +233,7 @@ if [ "${DROIDSPACES_ENABLE:-true}" = "true" ]; then
   if [ -f ./common/drivers/misc/ntsync.c ]; then
     echo "common 源码已含 ntsync.c，跳过 NTSync 补丁"
   else
-    wget "$REPO_URL/ntsync_compat_android13-5.15.patch" -O ntsync_compat.patch
+    wget "$REPO_URL/ntsync_compat_android12-5.10.patch" -O ntsync_compat.patch
     patch -p1 -F 3 < ntsync_compat.patch -d ./common || true
   fi
   if ! grep -q "^CONFIG_NTSYNC=y" "$DEFCONFIG"; then
