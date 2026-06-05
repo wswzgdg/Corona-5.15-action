@@ -64,11 +64,21 @@ fi
 clone_common_and_clean() {
   local target="$1"
   rm -rf "$target/common" "$target/AnyKernel3"
-  git clone --depth=1 "$COMMON_URL" -b "$COMMON_BRANCH" "$target/common"
+  if [ -n "${COMMON_COMMIT:-}" ]; then
+    echo "克隆 common 仓库（指定提交: $COMMON_COMMIT）"
+    git init "$target/common"
+    cd "$target/common"
+    git remote add origin "$COMMON_URL"
+    git fetch --depth=1 origin "$COMMON_COMMIT"
+    git checkout FETCH_HEAD
+    cd -
+  else
+    echo "克隆 common 仓库（分支: $COMMON_BRANCH 最新）"
+    git clone --depth=1 "$COMMON_URL" -b "$COMMON_BRANCH" "$target/common"
+  fi
   rm -f "$target/common/android/abi_gki_protected_exports_*"
-  # 去掉 -dirty 避免源码目录状态把额外后缀带进版本字符串
   sed -i 's/ -dirty//g' "$target/common/scripts/setlocalversion" 2>/dev/null
-  sed -i "\$i res=\$(echo \"\$res\" | sed 's/-dirty//g')" \
+  sed -i "\$i res=\$(echo \"\$res\" | sed 's/ -dirty//g')" \
     "$target/common/scripts/setlocalversion" 2>/dev/null
 }
 

@@ -32,6 +32,11 @@ on:
         required: true
         type: boolean
         default: false
+      common_commit:
+        description: "common 仓库提交哈希（留空=最新）"
+        required: false
+        type: string
+        default: ''
       build_none:
         description: "编译 无管理器"
         required: true
@@ -270,6 +275,7 @@ jobs:
       ccache_key: 'ccache-ecsv3-5.15'
       use_kpn: ${{ inputs.use_kpn }}
       version_name: ${{ inputs.version_name }}
+      common_commit: ${{ inputs.common_commit }}
       android_release: ${{ inputs.android_release }}
       clang_version: ${{ inputs.clang_version }}
       use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}

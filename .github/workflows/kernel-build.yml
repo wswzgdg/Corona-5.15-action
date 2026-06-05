@@ -7,6 +7,11 @@ on:
         description: 'ROOT manager type'
         required: true
         type: string
+      common_commit:
+        description: 'common 仓库提交哈希（留空=最新）'
+        required: false
+        type: string
+        default: ''
       kernel_suffix:
         description: '内核后缀'
         required: false
@@ -215,6 +220,7 @@ jobs:
           DROIDSPACES_ENABLE: ${{ inputs.droidspaces_enable }}
           BUILD_SUSFS_MODE: ${{ inputs.susfs_mode }}
           CLANG_VERSION: ${{ inputs.clang_version }}
+          COMMON_COMMIT: ${{ inputs.common_commit }}
           SKIP_APT: '1'
           SKIP_SOURCE_PREP: ${{ inputs.use_prepared_source && '1' || '' }}
           CCACHE_COMPILERCHECK: none

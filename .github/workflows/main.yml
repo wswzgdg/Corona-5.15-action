@@ -4,11 +4,17 @@ env:
   TZ: Asia/Shanghai
   ANDROID_VERSION: 'android13'
   KERNEL_VERSION: '5.15'
+  COMMON_COMMIT: ${{ github.event.inputs.common_commit || '' }}
   CCACHE_KEY: ccache-neov4-5.15
 
 on:
   workflow_dispatch:
     inputs:
+      common_commit:
+        description: 'common 仓库提交哈希（留空=最新）'
+        required: false
+        type: string
+        default: ''
       ksu_type:
         description: '选择ROOT方案'
         required: true
