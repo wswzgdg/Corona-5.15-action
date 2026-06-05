@@ -68,16 +68,6 @@ on:
         required: true
         type: boolean
         default: true
-      ccache_update:
-        description: "更新 ccache 缓存"
-        required: false
-        type: boolean
-        default: false
-      refresh_source:
-        description: "强制刷新 prepared-workspace 缓存"
-        required: false
-        type: boolean
-        default: false
       use_kpn:
         description: "使用 KP-N patch 内核镜像"
         required: false
@@ -186,15 +176,12 @@ jobs:
 
       - name: 计算缓存命中状态
         id: gate
-        env:
-          CACHE_HIT: ${{ steps.prepared-restore.outputs.cache-hit }}
-          REFRESH: ${{ inputs.refresh_source }}
         run: |
-          if [ "$CACHE_HIT" = "true" ] && [ "$REFRESH" != "true" ]; then
+          if [ "${{ steps.prepared-restore.outputs.cache-hit }}" = "true" ]; then
             echo "需要同步=否（命中 prepared-workspace 缓存）"
             echo "need_sync=false" >> "$GITHUB_OUTPUT"
           else
-            echo "需要同步=是（hit=$CACHE_HIT refresh=$REFRESH）"
+            echo "需要同步=是（缓存未命中）"
             echo "need_sync=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -261,43 +248,176 @@ jobs:
           else
             echo "上次 common ccache 不存在，无需清理"
           fi
-
-  build:
+  build-resukisu:
     needs: [count-builds, prepare-source]
-    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') }}
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') && inputs.build_resukisu }}
     permissions:
       actions: write
       contents: read
       packages: read
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       fail-fast: false
       matrix:
-        manager: [none, resukisu, sukisu, ksunext, ksu, kowsu]
         susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
-        exclude:
-          - manager: none
-            susfs: true
     uses: ./.github/workflows/kernel-build.yml
     with:
-      manager: ${{ matrix.manager }}
+      manager: resukisu
       kernel_suffix: ${{ inputs.kernel_suffix }}
       susfs: ${{ matrix.susfs }}
       susfs_mode: ${{ inputs.build_susfs }}
       droidspaces_enable: ${{ inputs.droidspaces_enable }}
-      ccache_update: ${{ inputs.ccache_update }}
       ccache_key: 'ccache-ecsv3-5.15'
       use_kpn: ${{ inputs.use_kpn }}
       version_name: ${{ inputs.version_name }}
       android_release: ${{ inputs.android_release }}
       clang_version: ${{ inputs.clang_version }}
       use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
-      build_enabled: ${{ (matrix.manager == 'sukisu' && inputs.build_sukisu) || (matrix.manager == 'resukisu' && inputs.build_resukisu) || (matrix.manager == 'ksunext' && inputs.build_ksunext) || (matrix.manager == 'ksu' && inputs.build_ksu) || (matrix.manager == 'kowsu' && inputs.build_kowsu) || (matrix.manager == 'none' && inputs.build_none) }}
+      build_enabled: true
     secrets: inherit
 
+  build-sukisu:
+    needs: [count-builds, prepare-source]
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') && inputs.build_sukisu }}
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+    uses: ./.github/workflows/kernel-build.yml
+    with:
+      manager: sukisu
+      kernel_suffix: ${{ inputs.kernel_suffix }}
+      susfs: ${{ matrix.susfs }}
+      susfs_mode: ${{ inputs.build_susfs }}
+      droidspaces_enable: ${{ inputs.droidspaces_enable }}
+      ccache_key: 'ccache-ecsv3-5.15'
+      use_kpn: ${{ inputs.use_kpn }}
+      version_name: ${{ inputs.version_name }}
+      android_release: ${{ inputs.android_release }}
+      clang_version: ${{ inputs.clang_version }}
+      use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+      build_enabled: true
+    secrets: inherit
+
+  build-ksunext:
+    needs: [count-builds, prepare-source]
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') && inputs.build_ksunext }}
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+    uses: ./.github/workflows/kernel-build.yml
+    with:
+      manager: ksunext
+      kernel_suffix: ${{ inputs.kernel_suffix }}
+      susfs: ${{ matrix.susfs }}
+      susfs_mode: ${{ inputs.build_susfs }}
+      droidspaces_enable: ${{ inputs.droidspaces_enable }}
+      ccache_key: 'ccache-ecsv3-5.15'
+      use_kpn: ${{ inputs.use_kpn }}
+      version_name: ${{ inputs.version_name }}
+      android_release: ${{ inputs.android_release }}
+      clang_version: ${{ inputs.clang_version }}
+      use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+      build_enabled: true
+    secrets: inherit
+
+  build-ksu:
+    needs: [count-builds, prepare-source]
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') && inputs.build_ksu }}
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+    uses: ./.github/workflows/kernel-build.yml
+    with:
+      manager: ksu
+      kernel_suffix: ${{ inputs.kernel_suffix }}
+      susfs: ${{ matrix.susfs }}
+      susfs_mode: ${{ inputs.build_susfs }}
+      droidspaces_enable: ${{ inputs.droidspaces_enable }}
+      ccache_key: 'ccache-ecsv3-5.15'
+      use_kpn: ${{ inputs.use_kpn }}
+      version_name: ${{ inputs.version_name }}
+      android_release: ${{ inputs.android_release }}
+      clang_version: ${{ inputs.clang_version }}
+      use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+      build_enabled: true
+    secrets: inherit
+
+  build-kowsu:
+    needs: [count-builds, prepare-source]
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') && inputs.build_kowsu }}
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+    uses: ./.github/workflows/kernel-build.yml
+    with:
+      manager: kowsu
+      kernel_suffix: ${{ inputs.kernel_suffix }}
+      susfs: ${{ matrix.susfs }}
+      susfs_mode: ${{ inputs.build_susfs }}
+      droidspaces_enable: ${{ inputs.droidspaces_enable }}
+      ccache_key: 'ccache-ecsv3-5.15'
+      use_kpn: ${{ inputs.use_kpn }}
+      version_name: ${{ inputs.version_name }}
+      android_release: ${{ inputs.android_release }}
+      clang_version: ${{ inputs.clang_version }}
+      use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+      build_enabled: true
+    secrets: inherit
+
+  build-none:
+    needs: [count-builds, prepare-source]
+    if: ${{ always() && needs.count-builds.result == 'success' && (needs.prepare-source.result == 'success' || needs.prepare-source.result == 'skipped') && inputs.build_none }}
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+    uses: ./.github/workflows/kernel-build.yml
+    with:
+      manager: none
+      kernel_suffix: ${{ inputs.kernel_suffix }}
+      susfs: ${{ matrix.susfs }}
+      susfs_mode: ${{ inputs.build_susfs }}
+      droidspaces_enable: ${{ inputs.droidspaces_enable }}
+      ccache_key: 'ccache-ecsv3-5.15'
+      use_kpn: ${{ inputs.use_kpn }}
+      version_name: ${{ inputs.version_name }}
+      android_release: ${{ inputs.android_release }}
+      clang_version: ${{ inputs.clang_version }}
+      use_prepared_source: ${{ needs.count-builds.outputs.use_prepared == 'true' }}
+      build_enabled: true
+    secrets: inherit
   release:
     if: always()
-    needs: build
+    needs: [build-resukisu, build-sukisu, build-ksunext, build-ksu, build-kowsu, build-none]
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -307,12 +427,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: 下载全部 ZIP 工件
+      - name: 下载全部内核镜像
         uses: actions/download-artifact@v8
         with:
-          path: ./release_zips
-          pattern: ak3-*
-          merge-multiple: true
+          path: ./kernel_images
+          pattern: kernel-Image-*
+          merge-multiple: false
 
       - name: 下载 clang 元数据工件
         uses: actions/download-artifact@v8
@@ -320,6 +440,31 @@ jobs:
           path: ./clang_meta
           pattern: clang-meta-*
           merge-multiple: true
+
+      - name: 打包 AnyKernel3 ZIP
+        env:
+          AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .github/workflows/all_managers/packaging.sh
+          AK3_URL="https://github.com/Corona-oplus-kernel/AnyKernel3"
+          [ -n "${AK3_TOKEN:-}" ] && AK3_URL="https://${AK3_TOKEN}@github.com/Corona-oplus-kernel/AnyKernel3"
+          CORONA_URL="https://github.com/Corona-oplus-kernel/Corona_module"
+          mkdir -p release_zips
+          for img_dir in kernel_images/*/; do
+            [ -d "$img_dir" ] || continue
+            name=$(basename "$img_dir")
+            manager="${name#kernel-Image-}"
+            case "$name" in
+              *-susfs) susfs_label="SUSFS"; manager="${manager%-susfs}" ;;
+              *-nosusfs) susfs_label=""; manager="${manager%-nosusfs}" ;;
+              *) susfs_label="" ;;
+            esac
+            [ -f "${img_dir}Image" ] || continue
+            prepare_anykernel_tree "$manager" "false" "$AK3_URL" "$CORONA_URL"
+            package_anykernel_zip "$manager" "5.15" "${img_dir}Image" "$(pwd)/release_zips" "noksu" "$susfs_label" >/dev/null
+            rm -rf AnyKernel3
+          done
 
       - name: 检查是否存在 ZIP 产物
         id: release_zips_check

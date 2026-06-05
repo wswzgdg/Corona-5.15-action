@@ -26,11 +26,6 @@ on:
         required: false
         type: string
         default: ''
-      ccache_update:
-        description: '是否覆盖更新 ccache 缓存'
-        required: false
-        type: boolean
-        default: false
       ccache_key:
         description: 'ccache 缓存键前缀'
         required: false
@@ -71,11 +66,6 @@ on:
         required: false
         type: boolean
         default: false
-      builder_image:
-        description: '预构建镜像 (ghcr.io/...:tag)，默认指向本仓库的 builder image'
-        required: false
-        type: string
-        default: ''
 
 jobs:
   build-kernel:
@@ -85,28 +75,47 @@ jobs:
     permissions:
       actions: write
       contents: read
-      packages: read
-    container:
-      image: ${{ inputs.builder_image != '' && inputs.builder_image || 'ghcr.io/wswzgdg/corona-5.15-action-builder:clang23' }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         shell: bash
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CCACHE_DIR: ${{ github.workspace }}/.ccache_5.15
+      CCACHE_MAXSIZE: 5G
+      CCACHE_BASEDIR: ${{ github.workspace }}
       OWN_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-${{ inputs.susfs && 'on' || 'off' }}-${{ inputs.droidspaces_enable && 'droidspaces' || 'none' }}-${{ inputs.manager }}
       COMMON_KEY: ${{ inputs.ccache_key }}-a${{ inputs.android_release }}-Linux-${{ github.ref_name }}-common
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: 配置 ccache
+      - name: 安装系统依赖
         run: |
-          echo "CCACHE_DIR=$HOME/.ccache_5.15" >> "$GITHUB_ENV"
-          echo "CCACHE_MAXSIZE=5G" >> "$GITHUB_ENV"
-          mkdir -p "$HOME/.ccache_5.15"
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            binutils python-is-python3 ccache \
+            flex bison dwarves libssl-dev libelf-dev bc make cmake \
+            zip aria2 gnupg gawk rsync \
+            binutils-aarch64-linux-gnu binutils-arm-linux-gnueabihf \
+            tar gzip xz-utils bzip2 zstd device-tree-compiler libc6-dev-i386 \
+            gh patch git-lfs curl wget ca-certificates
+
+      - name: 恢复工具链缓存
+        id: cache-toolchains
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ${{ github.workspace }}/clang14
+            ${{ github.workspace }}/clang22
+            ${{ github.workspace }}/clang23
+          key: toolchains-${{ runner.os }}
+
+      - name: 恢复 ThinLTO 缓存
+        id: restore-thinlto
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/.thinlto-cache
+          key: thinlto-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}
 
       - name: 下载预备 workspace
         if: ${{ inputs.use_prepared_source }}
@@ -158,38 +167,35 @@ jobs:
             echo "public ccache 不存在，将进行全新编译"
           fi
 
-      - name: 读取上次命中率基线
-        id: prev_rate
-        run: |
-          if [ -f "$CCACHE_DIR/.prev_hit_rate.txt" ]; then
-            VAL="$(cat "$CCACHE_DIR/.prev_hit_rate.txt" 2>/dev/null || echo 0)"
-          else
-            VAL="0"
-          fi
-          [ -n "$VAL" ] || VAL="0"
-          echo "上次 own 缓存命中率基线: $VAL%"
-          echo "value=$VAL" >> "$GITHUB_OUTPUT"
-
       - name: 准备工具链
         env:
           CLANG_VERSION: ${{ inputs.clang_version }}
         run: |
           source .github/workflows/all_managers/toolchain.sh
           ensure_toolchain "$CLANG_VERSION" "$GITHUB_WORKSPACE"
-
-      - name: 安装 ccache ECS
-        run: |
-          cp -f ./lib/ccache-x86-64 /usr/bin/ccache
-          chmod +x /usr/bin/ccache
-          ccache --version | head -n 1
+          # 将符号链接替换为实际文件，以便 actions/cache 可以缓存
+          for d in "$GITHUB_WORKSPACE"/clang14 "$GITHUB_WORKSPACE"/clang22 "$GITHUB_WORKSPACE"/clang23; do
+            [ -d "$d" ] || continue
+            for sub in "$d"/*; do
+              if [ -L "$sub" ]; then
+                real="$(readlink -f "$sub")"
+                rm -f "$sub"
+                cp -aL "$real" "$sub" 2>/dev/null || true
+              fi
+            done
+          done
+          echo "工具链就绪"
+          ls -la "$GITHUB_WORKSPACE"/clang*/ 2>/dev/null | head -20
 
       - name: 初始化 ccache
         run: |
-          export CCACHE_COMPILERCHECK="none"
-          export CCACHE_BASEDIR="$GITHUB_WORKSPACE"
-          export CCACHE_NOHASHDIR="true"
-          export CCACHE_NOHARDLINK="true"
-          ccache -M ${{ env.CCACHE_MAXSIZE }}
+          # 替换为 ECS 版 ccache（如已安装同版本则跳过）
+          if ! ccache --version 2>/dev/null | grep -q "4\.10\.2"; then
+            sudo cp -f ./lib/ccache-x86-64 /usr/bin/ccache
+            sudo chmod +x /usr/bin/ccache
+          fi
+          ccache --version | head -n 1
+          ccache -M "$CCACHE_MAXSIZE"
           ccache -o compression=true
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
           echo "ccache 初始状态:"
@@ -199,6 +205,7 @@ jobs:
         id: compile
         continue-on-error: true
         env:
+          SKIP_PACKAGE: '1'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KERNEL_COMMON_TOKEN: ${{ secrets.KERNEL_COMMON_TOKEN }}
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}
@@ -215,79 +222,35 @@ jobs:
           CCACHE_NOHARDLINK: true
           CCACHE_IS_KERNEL_COMPILING: true
         run: |
-          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
-          export CCACHE_BASEDIR="$GITHUB_WORKSPACE"
           export CCACHE_LOGFILE="$GITHUB_WORKSPACE/kernel_workspace/ccache.log"
           mkdir -p "$(dirname "$CCACHE_LOGFILE")"
-          echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
           chmod +x .github/workflows/all_managers/common.sh
           .github/workflows/all_managers/common.sh "${{ inputs.manager }}" "${{ inputs.kernel_suffix }}" "${{ inputs.susfs && 'on' || 'off' }}" "${{ inputs.use_kpn && 'true' || 'false' }}" "${{ inputs.version_name }}"
           echo "ccache 状态："
           ccache -s
 
-      - name: 计算本次命中率
-        if: ${{ always() }}
-        id: cur_rate
-        run: |
-          HITS=""
-          TOTAL=""
-          if PRINT_STATS="$(ccache --print-stats 2>/dev/null)" && [ -n "$PRINT_STATS" ]; then
-            HITS="$(printf '%s\n' "$PRINT_STATS" | awk '$1=="cache_hit_direct"||$1=="cache_hit_preprocessed"{s+=$2} END{print s+0}')"
-            MISS="$(printf '%s\n' "$PRINT_STATS" | awk '$1=="cache_miss"{print $2; exit}')"
-            [ -n "$MISS" ] || MISS=0
-            TOTAL=$((HITS + MISS))
-          fi
-          if [ -z "$HITS" ] || [ -z "$TOTAL" ] || [ "$TOTAL" = "0" ]; then
-            STATS="$(ccache -s 2>/dev/null || true)"
-            HITS="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Hits:/ {print $2; exit}')"
-            TOTAL="$(printf '%s\n' "$STATS" | awk '/^[[:space:]]*Cacheable calls:/ {print $3; exit}')"
-          fi
-          if [ -z "$HITS" ] || [ -z "$TOTAL" ] || [ "$TOTAL" = "0" ]; then
-            RATE="0"
-          else
-            RATE="$(awk -v h="$HITS" -v t="$TOTAL" 'BEGIN{ printf "%.2f", h*100/t }')"
-          fi
-          echo "本次命中率: $RATE% (hits=$HITS / total=$TOTAL)"
-          echo "value=$RATE" >> "$GITHUB_OUTPUT"
-          printf '%s' "$RATE" > "$CCACHE_DIR/.prev_hit_rate.txt"
-
-      - name: 决定 own 缓存写入策略
-        if: ${{ always() && steps.compile.outcome == 'success' }}
-        id: own_decision
-        env:
-          PREV: ${{ steps.prev_rate.outputs.value }}
-          CUR: ${{ steps.cur_rate.outputs.value }}
-          OWN_HIT: ${{ steps.ccache-own.outputs.cache-hit }}
-          FORCE_UPDATE: ${{ inputs.ccache_update }}
-        run: |
-          if [ "$OWN_HIT" != "true" ]; then
-            DECISION="save"
-            REASON="own 缓存首次写入"
-          else
-            DECISION="overwrite"
-            if [ "$FORCE_UPDATE" = "true" ]; then
-              REASON="ccache_update=true"
-            else
-              REASON="默认覆盖 (本次 $CUR% / 上次 $PREV%)"
-            fi
-          fi
-          echo "own 写入决定: $DECISION ($REASON)"
-          echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
+      - name: 上传内核镜像
+        if: ${{ steps.compile.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ format('kernel-Image-{0}{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, (inputs.susfs_mode == 'both' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
+          path: ${{ github.workspace }}/kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image
+          compression-level: 0
 
       - name: 删除旧 own 缓存
-        if: ${{ always() && steps.own_decision.outputs.decision == 'overwrite' }}
+        if: ${{ always() }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh cache delete "$OWN_KEY" -R "${{ github.repository }}"; then
-            echo "已删除旧 own 缓存: $OWN_KEY"
+          if gh cache delete "${{ env.OWN_KEY }}" -R "${{ github.repository }}" 2>/dev/null; then
+            echo "已删除旧 own 缓存"
           else
             echo "旧 own 缓存不存在，直接保存"
           fi
 
       - name: 保存 own ccache 缓存
-        if: ${{ always() && (steps.own_decision.outputs.decision == 'save' || steps.own_decision.outputs.decision == 'overwrite') }}
+        if: ${{ always() }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
@@ -296,15 +259,35 @@ jobs:
 
       # 仅 none manager 写 common 缓存，避免多个矩阵 job 并发抢占同一 key
       - name: 保存 common ccache 缓存
-        if: ${{ always() && steps.compile.outcome == 'success' && inputs.use_prepared_source && inputs.manager == 'none' }}
+        if: ${{ always() && inputs.use_prepared_source && inputs.manager == 'none' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ env.COMMON_KEY }}
 
-      - name: 记录 clang 版本元数据
-        if: ${{ always() }}
+      - name: 保存 ThinLTO 缓存
+        if: ${{ always() && steps.restore-thinlto.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/kernel_workspace/.thinlto-cache
+          key: thinlto-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}
+
+      - name: 保存工具链缓存
+        if: ${{ always() && steps.cache-toolchains.outputs.cache-hit != 'true' && steps.compile.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ${{ github.workspace }}/clang14
+            ${{ github.workspace }}/clang22
+            ${{ github.workspace }}/clang23
+          key: toolchains-${{ runner.os }}
+      - id: record_clang_meta
+        name: 记录 clang 版本元数据
+        if: ${{ steps.compile.outcome == 'success' }}
+        continue-on-error: true
         env:
           CLANG_VERSION_INPUT: ${{ inputs.clang_version }}
         run: |
@@ -319,18 +302,13 @@ jobs:
           CLANG_LABEL_RAW="$($CLANG_BIN -v 2>&1 | grep 'clang version' | head -n 1)"
           CLANG_LABEL_VERSION="$(printf '%s' "$CLANG_LABEL_RAW" | grep -oE '[0-9]+(\.[0-9]+){0,2}' | head -n 1)"
           [ -n "$CLANG_LABEL_VERSION" ] || CLANG_LABEL_VERSION="$CLANG_VERSION_INPUT"
-          printf '%s' "$CLANG_LABEL_VERSION" > "$GITHUB_WORKSPACE/clang_meta/${{ inputs.manager }}.txt"
-
-      - name: 上传 ZIP 工件
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ format('ak3-{0}{1}', inputs.manager == 'none' && 'noksu' || inputs.manager, (inputs.susfs_mode == 'both' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
-          path: ${{ github.workspace }}/out_zips/AK3-*.zip
+          printf '%s' "$CLANG_LABEL_VERSION" > "$GITHUB_WORKSPACE/clang_meta/version.txt"
 
       - name: 上传 clang 元数据工件
-        if: ${{ always() }}
+        if: ${{ steps.record_clang_meta.outcome == 'success' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ format('clang-meta-{0}{1}', inputs.manager, (inputs.susfs_mode == 'both' && inputs.manager != 'none') && (inputs.susfs && '-susfs' || '-nosusfs') || '') }}
-          path: ${{ github.workspace }}/clang_meta/${{ inputs.manager }}.txt
+          name: clang-meta
+          path: ${{ github.workspace }}/clang_meta/version.txt
+
