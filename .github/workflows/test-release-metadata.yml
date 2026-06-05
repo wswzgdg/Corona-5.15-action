@@ -45,7 +45,7 @@ jobs:
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'): '1111111111111111111111111111111111111111',
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'): '2222222222222222222222222222222222222222',
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kp-n'): '9999999999999999999999999999999999999999',
-                  ('https://github.com/ReSukiSU/ReSukiSU.git', 'main'): '3333333333333333333333333333333333333333',
+                  ('https://github.com/ReSukiSU/ReSukiSU.git', 'dev'): '3333333333333333333333333333333333333333',
                   ('https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'): '4444444444444444444444444444444444444444',
                }
 

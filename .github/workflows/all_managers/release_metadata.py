@@ -24,7 +24,7 @@ AK3_REPOS = {
     'kp-n': ('ak3-kp-n', 'kp-n', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kp-n'),
 }
 MANAGER_REPOS = {
-    'resukisu': ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'main'),
+    'resukisu': ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'dev'),
     'sukisu': ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
     'ksunext': ('manager', 'KSUNEXT', 'https://github.com/pershoot/KernelSU-Next.git', 'dev-susfs'),
     'ksu': ('manager', 'KernelSU', 'https://github.com/tiann/KernelSU.git', 'dev'),
