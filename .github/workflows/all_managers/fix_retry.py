@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""fix_retry.py: Fix compile/link errors from KSU/SUSFS sources, then retry."""
+"""fix_retry.py: Auto-fix KSU/SUSFS compile/link errors, then retry make."""
 import sys, re, os
 from collections import defaultdict
 
@@ -17,12 +17,11 @@ COMMON_DIR = os.path.join(KSU_DIR, 'kernel_workspace/kernel_platform/common')
 
 
 def resolve_ksu_source(short_path: str) -> str:
-    """Convert 'source/drivers/kernelsu/foo.c' to absolute path under COMMON_DIR."""
     path = short_path.replace('source/', '', 1)
     return os.path.abspath(os.path.join(COMMON_DIR, path))
 
 
-# --- 1. Parse undefined symbols ---
+# --- Phase 1: Collect undefined symbols ---
 undef_refs = set()
 for m in re.finditer(r"undefined reference to `([a-zA-Z0-9_]+)'", log):
     undef_refs.add(m.group(1))
@@ -31,7 +30,8 @@ for m in re.finditer(r"ld.lld: error: undefined symbol: (\w+)", log):
     if re.search(r'ksu|susfs|find_kernel', sym, re.I):
         undef_refs.add(sym)
 
-# --- 2. Fix compile errors per KSU source file ---
+
+# --- Phase 2: Parse & fix compile errors ---
 FIX_MAP = {
     'struct kprobe':     '#include <linux/kprobes.h>',
     'struct stat':       '#include <linux/stat.h>',
@@ -43,7 +43,7 @@ HEADER_FNS = {'register_kprobe', 'unregister_kprobe',
 
 file_errors = defaultdict(list)
 for m in re.finditer(
-    r'(?P<file>source/drivers/kernelsu/\S+?\.c):(?P<line>\d+):(?P<col>\d+):\s+error:\s+(?P<msg>.*)',
+    r'(?P<file>source/drivers/kernelsu/[\w./-]+\.c):(?P<line>\d+):(?P<col>\d+):\s+error:\s+(?P<msg>.*)',
     log, re.MULTILINE
 ):
     full_path = resolve_ksu_source(m.group('file'))
@@ -60,30 +60,25 @@ for fpath, errs in file_errors.items():
     needs_local_vars = set()
     msg_text = ' '.join(e['msg'] for e in errs)
 
-    # Check for conflicting types first (kernel headers already define the symbol)
-    conflict_fixed = False
+    # --- 2a. Conflicting types: kernel already declares it ---
     for e in errs:
         m = re.search(r"conflicting types for '(\w+)'", e['msg'])
-        if m:
-            sym = m.group(1)
-            target_line = e['line']
-            with open(fpath) as f:
-                lines = f.readlines()
-            for idx in [target_line - 1, target_line - 2, target_line]:
-                if idx >= len(lines) or idx < 0:
-                    continue
-                if sym in lines[idx] and not lines[idx].strip().startswith('/*'):
-                    lines[idx] = f'/* fix_retry: kernel already defines {sym} */\n'
-                    with open(fpath, 'w') as f:
-                        f.writelines(lines)
-                    compile_fixes = True
-                    conflict_fixed = True
-                    print(f"Conflict: removed KSU declaration of '{sym}' in {os.path.basename(fpath)} (line {idx+1})")
-                    break
-        if conflict_fixed:
-            break
+        if not m:
+            continue
+        sym = m.group(1)
+        target_line = e['line']
+        with open(fpath) as f:
+            lines = f.readlines()
+        for idx in [target_line - 1, target_line - 2, target_line]:
+            if 0 <= idx < len(lines) and sym in lines[idx] and '/*' not in lines[idx]:
+                lines[idx] = f'/* fix_retry: kernel already defines {sym} */\n'
+                with open(fpath, 'w') as f:
+                    f.writelines(lines)
+                compile_fixes = True
+                print(f"Conflict: removed KSU '{sym}' ({os.path.basename(fpath)}:{idx+1})")
+                break
 
-    # Redefinition: kernel/SUSFS already defines the symbol, fix ALL in one pass
+    # --- 2b. Redefinition: ALL in one pass (no break) ---
     for e in errs:
         m = re.search(r"redefinition of '(\w+)'", e['msg'])
         if not m:
@@ -92,79 +87,88 @@ for fpath, errs in file_errors.items():
         target_line = e['line'] - 1
         with open(fpath) as f:
             lines = f.readlines()
-        if 0 <= target_line < len(lines):
-            orig = lines[target_line]
-            if not orig.strip().startswith(('/*', '*', '__weak')):
-                stripped = orig.strip()
-                # Function def in same file: __weak does not help, use fallback
-                if not stripped.endswith(';') and not stripped.endswith(','):
-                    pass
-                else:
-                    new_line = re.sub(
-                        r'^(\s*)((?:static\s+)?(?:inline\s+)?\w+(?:\s+\*?)?)(' + re.escape(sym) + r'\b)',
-                        r'\1__weak \2 \3',
-                        orig
-                    )
-                    if new_line != orig:
-                        lines[target_line] = new_line
-                        with open(fpath, 'w') as f:
-                            f.writelines(lines)
-                        compile_fixes = True
-                        print(f"Redef: added __weak to '{sym}' in {os.path.basename(fpath)} (line {target_line+1})")
-                        continue
-        # Fallback: try commenting out a nearby declaration
-        # If it is a function definition (no ;), wrap with #if 0 / #endif
-        for delta in (0, 1, 2):
-            idx = target_line - delta
-            if idx < 0 or idx >= len(lines):
-                continue
-            if sym in lines[idx] and not lines[idx].strip().startswith(('/*', '*', '#')):
-                stripped = lines[idx].strip()
-                if not stripped.endswith(';') and not stripped.endswith(','):
-                    brace_count = 0
-                    end_idx = idx
-                    started = False
-                    while end_idx < len(lines):
-                        brace_count += lines[end_idx].count('{') - lines[end_idx].count('}')
-                        if brace_count > 0:
-                            started = True
-                        if started and brace_count == 0:
-                            break
-                        end_idx += 1
-                    lines.insert(end_idx + 1, '#endif /* fix_retry: SUSFS already defines */\n')
-                    lines.insert(idx, '#if 0 /* fix_retry: SUSFS already defines */\n')
-                else:
-                    lines[idx] = f'// fix_retry: SUSFS already defines {sym}\n'
+        if not (0 <= target_line < len(lines)):
+            continue
+        orig = lines[target_line]
+        if orig.strip().startswith(('/*', '*', '__weak')):
+            continue
+        # Try __weak for variable declarations (ends with ; or ,)
+        stripped = orig.strip()
+        if stripped.endswith(';') or stripped.endswith(','):
+            new_line = re.sub(
+                r'^(\s*)((?:static\s+)?(?:inline\s+)?\w+(?:\s+\*?)?)(' + re.escape(sym) + r'\b)',
+                r'\1__weak \2 \3', orig
+            )
+            if new_line != orig:
+                lines[target_line] = new_line
                 with open(fpath, 'w') as f:
                     f.writelines(lines)
                 compile_fixes = True
-                print(f"Redef: removed KSU '{sym}' in {os.path.basename(fpath)} (line {idx+1})")
+                print(f"Redef: __weak '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
+                continue
+        # Fallback: #if 0 / #endif for function definitions
+        # Find matching braces
+        brace_depth = 0
+        end_brace = -1
+        for j in range(target_line, len(lines)):
+            brace_depth += lines[j].count('{') - lines[j].count('}')
+            if brace_depth <= 0 and j > target_line:
+                end_brace = j
                 break
+        if end_brace > target_line:
+            lines[target_line] = f'#if 0 /* fix_retry: SUSFS already defines {sym} */\n'
+            lines[end_brace] = '#endif\n'
+        else:
+            lines[target_line] = f'/* fix_retry: SUSFS already defines {sym} */\n'
+        with open(fpath, 'w') as f:
+            f.writelines(lines)
+        compile_fixes = True
+        print(f"Redef: #if 0 '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
 
-    
-    # --- 2d. UserArgPtr: incompatible pointer types passing to struct user_arg_ptr * ---
+    # --- 2c. StaticKey unary '!' ---
     for e in errs:
-        if "parameter of type 'struct user_arg_ptr *'" not in e['msg']:
+        m = re.search(r"invalid argument type 'struct (static_key_\w+)' to unary expression", e['msg'])
+        if not m:
             continue
         target_line = e['line'] - 1
         with open(fpath) as f:
             lines = f.readlines()
         if 0 <= target_line < len(lines):
             line = lines[target_line]
-            if 'argv_user' in line:
-                new_line = re.sub(
-                    r'\bargv_user\b',
-                    r'(&(struct user_arg_ptr){ .ptr = argv_user, .is_compat = IS_ENABLED(CONFIG_COMPAT) })',
-                    line
-                )
-                if new_line != line:
-                    lines[target_line] = new_line
-                    with open(fpath, 'w') as f:
-                        f.writelines(lines)
-                    compile_fixes = True
-                    print(f"UserArgPtr: wrapped argv_user ({os.path.basename(fpath)}:{target_line+1})")
-                    break
+            # Pattern: !ksu_su_compat_enabled → !static_key_enabled(&var.key)
+            new_line = re.sub(
+                r'!(\w+)\b(?!\s*\()',
+                r'!static_key_enabled(&\1.key)',
+                line
+            )
+            if new_line != line:
+                lines[target_line] = new_line
+                with open(fpath, 'w') as f:
+                    f.writelines(lines)
+                compile_fixes = True
+                print(f"Unary: fixed '!{m.group(1)}' ({os.path.basename(fpath)}:{target_line+1})")
 
+    # --- 2d. UserArgPtr ---
+    for e in errs:
+        if "parameter of type 'struct user_arg_ptr *'" not in e['msg']:
+            continue
+        target_line = e['line'] - 1
+        with open(fpath) as f:
+            lines = f.readlines()
+        if 0 <= target_line < len(lines) and 'argv_user' in lines[target_line]:
+            new_line = re.sub(
+                r'\bargv_user\b',
+                r'(&(struct user_arg_ptr){ .ptr = argv_user, .is_compat = IS_ENABLED(CONFIG_COMPAT) })',
+                lines[target_line]
+            )
+            if new_line != lines[target_line]:
+                lines[target_line] = new_line
+                with open(fpath, 'w') as f:
+                    f.writelines(lines)
+                compile_fixes = True
+                print(f"UserArgPtr: fixed ({os.path.basename(fpath)}:{target_line+1})")
+
+    # --- 2e. Collect missing includes/forward/extern ---
     for struct_name, include in FIX_MAP.items():
         if re.search(r'\b' + re.escape(struct_name) + r'\b', msg_text):
             missing_includes.add(include)
@@ -198,7 +202,6 @@ for fpath, errs in file_errors.items():
 
     with open(fpath) as f:
         lines = f.readlines()
-
     if any('fix_retry_applied' in l for l in lines):
         continue
 
@@ -241,7 +244,6 @@ for fpath, errs in file_errors.items():
             new_lines.append(line)
     if not inserted:
         new_lines = insert + lines
-
     with open(fpath, 'w') as f:
         f.writelines(new_lines)
     compile_fixes = True
@@ -249,20 +251,19 @@ for fpath, errs in file_errors.items():
           f"{len(missing_includes)}i {len(missing_forward)}f {len(missing_externs)}e "
           f"local={needs_local_vars}")
 
-# --- 3. Multiple definitions: add __weak to KSU's definition ---
+
+# --- Phase 3: Duplicate symbols → __weak ---
 for m in re.finditer(r"ld.lld: error: duplicate symbol: (\w+)", log):
     sym = m.group(1)
     for fpath in list(file_errors.keys()):
         with open(fpath) as f:
             clines = f.readlines()
         was_modified = False
-        pat = re.compile(r'\b' + re.escape(sym) + r'\s*\(')
         for i, cline in enumerate(clines):
-            if pat.search(cline) and not '__weak' in cline:
+            if sym in cline and '__weak' not in cline:
                 new_line = re.sub(
-                    r'^(\s*)(?:(?:static\s+)?(?:inline\s+)?(?:int|void|bool|long|char|size_t|ssize_t|u\d+|s\d+))\s+(\w+\s*\()',
-                    r'\1__weak \2 \3',
-                    cline
+                    r'^(\s*)((?:static\s+)?(?:inline\s+)?\w+(?:\s+\*?)?)(' + re.escape(sym) + r'\b)',
+                    r'\1__weak \2 \3', cline
                 )
                 if new_line != cline:
                     clines[i] = new_line
@@ -272,9 +273,10 @@ for m in re.finditer(r"ld.lld: error: duplicate symbol: (\w+)", log):
             with open(fpath, 'w') as f:
                 f.writelines(clines)
             compile_fixes = True
-            print(f"Duplicate: added __weak to '{sym}' in {os.path.basename(fpath)}")
+            print(f"Duplicate: __weak '{sym}' ({os.path.basename(fpath)})")
 
-# --- 4. Generate weak stubs when no compile errors remain ---
+
+# --- Phase 4: Weak stubs for remaining undefined symbols ---
 if not compile_fixes and undef_refs:
     ksu_related = {s for s in undef_refs if re.search(r'ksu|susfs|find_kernel', s, re.I)}
     if ksu_related:
@@ -285,7 +287,8 @@ if not compile_fixes and undef_refs:
             for sym in sorted(undef_refs):
                 f.write(f'int __weak {sym}(void) {{ return 0; }}\n')
 
-        common_dir = os.path.dirname(os.path.dirname(os.path.abspath(weak_out)))
+        # Write Makefile entry in common/ (ONE dirname, not two!)
+        common_dir = os.path.dirname(os.path.abspath(weak_out))
         makefile = os.path.join(common_dir, "Makefile")
         obj_line = "obj-y += kernelsu_retry.o"
         if os.path.isfile(makefile):
@@ -294,6 +297,6 @@ if not compile_fixes and undef_refs:
                     with open(makefile, "a") as mf2:
                         mf2.write(obj_line + "\n")
         link_fixes = True
-        print(f"Generated {len(undef_refs)} weak stubs ({len(ksu_related)} ksu-related)")
+        print(f"Generated {len(undef_refs)} weak stubs ({len(ksu_related)} ksu-related) at {common_dir}")
 
 sys.exit(0 if (compile_fixes or link_fixes) else 1)
