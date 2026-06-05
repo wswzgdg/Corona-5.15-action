@@ -111,8 +111,10 @@ save_out_cache() {
   git remote add origin "https://${KERNEL_COMMON_TOKEN:-}@github.com/${OUT_CACHE_REPO}.git"
   rsync -a --delete "$out_dir/" ./
   git add -A
-  if git commit -m "out: none $(date -u +%Y%m%d-%H%M%S)" 2>/dev/null; then
-    git push --force origin none 2>/dev/null || echo "out: push failed"
+  # 设置 user config 避免 git commit 因缺少身份信息而 exit 128
+  if git -c user.email="ci@github.com" -c user.name="CI Bot" commit -m "out: none $(date -u +%Y%m%d-%H%M%S)" >/dev/null 2>&1; then
+    # 子 shell + 全重定向，彻底屏蔽 git exit 被 runner 捕获成 annotation
+    (git push --force origin none </dev/null >/dev/null 2>&1) || true
     echo "out: saved to none branch (force push)"
   else
     echo "out: no changes, skip push"

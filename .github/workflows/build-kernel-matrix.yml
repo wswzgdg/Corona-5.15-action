@@ -474,6 +474,7 @@ jobs:
 
       - name: 检查是否存在 ZIP 产物
         id: release_zips_check
+        continue-on-error: true
         run: |
           if compgen -G "release_zips/AK3-*.zip" > /dev/null; then
             echo "has_zips=true" >> "$GITHUB_OUTPUT"
