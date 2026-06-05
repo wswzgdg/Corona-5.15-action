@@ -32,16 +32,16 @@ on:
         required: true
         type: boolean
         default: false
-      common_commit:
-        description: "common 仓库提交哈希（留空=最新）"
-        required: false
-        type: string
-        default: ''
       build_none:
         description: "编译 无管理器"
         required: true
         type: boolean
         default: true
+      common_commit:
+        description: "common 仓库提交哈希（留空=最新）"
+        required: false
+        type: string
+        default: ''
       build_susfs:
         description: "启用 SUSFS"
         required: true
