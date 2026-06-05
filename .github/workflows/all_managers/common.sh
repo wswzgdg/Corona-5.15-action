@@ -82,6 +82,45 @@ clone_common_and_clean() {
     "$target/common/scripts/setlocalversion" 2>/dev/null
 }
 
+# ---- out 缓存仓库（git push 模式，统一 none 分支） ----
+OUT_CACHE_REPO="Corona-oplus-kernel/common-makeout"
+
+restore_out_cache() {
+  local cache_dir="$WORKDIR/out_cache"
+  local out_dir="$WORKDIR/kernel_workspace/kernel_platform/common/out"
+  rm -rf "$cache_dir"
+  if git clone --depth=1 "https://${KERNEL_COMMON_TOKEN:-}@github.com/${OUT_CACHE_REPO}.git" -b none "$cache_dir" 2>/dev/null; then
+    mkdir -p "$out_dir"
+    cp -a "$cache_dir/." "$out_dir/" 2>/dev/null || true
+    echo "out: restored from none branch"
+  else
+    rm -rf "$cache_dir"
+    echo "out: none branch not found, fresh build"
+  fi
+}
+
+save_out_cache() {
+  local out_dir="$WORKDIR/kernel_workspace/kernel_platform/common/out"
+  [ ! -d "$out_dir" ] && return 0
+  # 只有 none 管理器才保存，避免私库膨胀
+  [ "$MANAGER" != "none" ] && echo "out: skip save (only none branch persisted)" && return 0
+  local git_dir="$WORKDIR/out_cache_git"
+  rm -rf "$git_dir"
+  git init -b none "$git_dir"
+  cd "$git_dir"
+  git remote add origin "https://${KERNEL_COMMON_TOKEN:-}@github.com/${OUT_CACHE_REPO}.git"
+  rsync -a --delete "$out_dir/" ./
+  git add -A
+  if git commit -m "out: none $(date -u +%Y%m%d-%H%M%S)" 2>/dev/null; then
+    git push --force origin none 2>/dev/null || echo "out: push failed"
+    echo "out: saved to none branch (force push)"
+  else
+    echo "out: no changes, skip push"
+  fi
+  rm -rf "$git_dir"
+  cd "$WORKDIR"
+}
+
 # ---- 源码准备 ----
 if [ -z "${SKIP_SOURCE_PREP:-}" ]; then
   if [ ! -d kernel_workspace/.git ]; then
@@ -302,7 +341,18 @@ __retry_make_Image() {
   return 1
 }
 
+restore_out_cache
 __retry_make_Image
+exit_code=$?
+if [ $exit_code -eq 0 ]; then
+  save_out_cache
+fi
+
+# 打包：仅在编译成功时执行
+if [ $exit_code -ne 0 ]; then
+  echo "编译失败，跳过打包"
+  exit $exit_code
+fi
 
 # ---- 打包 ----
 if [ -z "${SKIP_PACKAGE:-}" ]; then
