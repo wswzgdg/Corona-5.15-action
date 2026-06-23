@@ -29,15 +29,14 @@ prepare_anykernel_tree() {
   local effective_kpn="$use_kpn"
   [ "$manager" = "resukisu" ] && effective_kpn="true"
 
+  git clone -b main "$ak3_url" --depth=1 AnyKernel3
+  mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
+
   if [ "$effective_kpn" = "true" ] && [ "$manager" != "none" ]; then
-    git clone -b kp-n "$ak3_url" --depth=1 AnyKernel3
-    mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
     curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-android -o ./AnyKernel3/patch/kptools
     curl -fL https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/kpimg -o ./AnyKernel3/patch/kpimg
     curl -fL https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip -o ./AnyKernel3/module/kpn.zip
   elif [ "$effective_kpn" != "true" ] && [ "$manager" = "sukisu" ]; then
-    git clone -b kpm "$ak3_url" --depth=1 AnyKernel3
-    mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
     local patch_url=""
     local api_resp=""
     local auth_args=()
@@ -65,9 +64,6 @@ print(matches[0] if matches else "")')
       patch_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/patch_android"
     fi
     curl -fL --retry 3 --retry-delay 5 "$patch_url" -o ./AnyKernel3/patch/patch
-  else
-    git clone -b main "$ak3_url" --depth=1 AnyKernel3
-    mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
   fi
 
   rm -rf ./AnyKernel3/.git
