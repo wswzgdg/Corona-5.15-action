@@ -371,3 +371,6 @@ if [ -z "${SKIP_PACKAGE:-}" ]; then
     "./common/out/arch/arm64/boot/Image" "$WORKDIR/out_zips" "noksu" "$SUSFS_PKG_LABEL" >/dev/null
   rm -rf AnyKernel3
 fi
+
+# 清理 kernel_workspace/.git 避免 actions/checkout post-cleanup 的 submodule 误报
+rm -rf "$WORKDIR/kernel_workspace/.git"
