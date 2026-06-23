@@ -102,25 +102,24 @@ restore_out_cache() {
 save_out_cache() {
   local out_dir="$WORKDIR/kernel_workspace/kernel_platform/common/out"
   [ ! -d "$out_dir" ] && return 0
-  # 只有 none 管理器才保存，避免私库膨胀
   [ "$MANAGER" != "none" ] && echo "out: skip save (only none branch persisted)" && return 0
   local git_dir="$WORKDIR/out_cache_git"
   rm -rf "$git_dir"
-  git init -b none "$git_dir"
-  cd "$git_dir"
-  git remote add origin "https://${KERNEL_COMMON_TOKEN:-}@github.com/${OUT_CACHE_REPO}.git"
-  rsync -a --delete "$out_dir/" ./
-  git add -A
-  # 设置 user config 避免 git commit 因缺少身份信息而 exit 128
-  if git -c user.email="ci@github.com" -c user.name="CI Bot" commit -m "out: none $(date -u +%Y%m%d-%H%M%S)" >/dev/null 2>&1; then
-    # 子 shell + 全重定向，彻底屏蔽 git exit 被 runner 捕获成 annotation
-    (git push --force origin none </dev/null >/dev/null 2>&1) || true
-    echo "out: saved to none branch (force push)"
-  else
-    echo "out: no changes, skip push"
-  fi
+  (
+    set +e
+    git init -b none "$git_dir"
+    cd "$git_dir" || return 0
+    git remote add origin "https://${KERNEL_COMMON_TOKEN:-}@github.com/${OUT_CACHE_REPO}.git"
+    rsync -a --delete "$out_dir/" ./
+    git add -A
+    if git -c user.email="ci@github.com" -c user.name="CI Bot" commit -m "out: none $(date -u +%Y%m%d-%H%M%S)" >/dev/null 2>&1; then
+      git push --force origin none </dev/null >/dev/null 2>&1 || true
+      echo "out: saved to none branch (force push)"
+    else
+      echo "out: no changes, skip push"
+    fi
+  )
   rm -rf "$git_dir"
-  cd "$WORKDIR"
 }
 
 # ---- 源码准备 ----
@@ -344,17 +343,8 @@ __retry_make_Image() {
 }
 
 restore_out_cache
-__retry_make_Image
-exit_code=$?
-if [ $exit_code -eq 0 ]; then
-  save_out_cache
-fi
-
-# 打包：仅在编译成功时执行
-if [ $exit_code -ne 0 ]; then
-  echo "编译失败，跳过打包"
-  exit $exit_code
-fi
+__retry_make_Image || { echo "编译失败，跳过打包"; exit 1; }
+save_out_cache || true
 
 # ---- 打包 ----
 if [ -z "${SKIP_PACKAGE:-}" ]; then
