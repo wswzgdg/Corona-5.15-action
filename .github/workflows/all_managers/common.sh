@@ -206,12 +206,16 @@ if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
   fi
 fi
 
-# ---- KSU compat 补丁 ----
+# ---- KSU compat 补丁（仅对未自带 SUSFS 的管理器打） ----
 if [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ] && [ -d "./common/KernelSU" ]; then
-  cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./common/KernelSU/
-  cd "$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU"
-  patch -p1 -F 3 < 10_enable_susfs_for_ksu.patch || true
-  cd "$WORKDIR/kernel_workspace/kernel_platform"
+  if grep -rq CONFIG_KSU_SUSFS ./common/KernelSU/kernel/ 2>/dev/null; then
+    echo "KSU 源码已自带 SUSFS 集成，跳过 compat patch"
+  else
+    cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./common/KernelSU/
+    cd "$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU"
+    patch -p1 -F 3 < 10_enable_susfs_for_ksu.patch || true
+    cd "$WORKDIR/kernel_workspace/kernel_platform"
+  fi
 fi
 
 # ---- defconfig 配置 ----
