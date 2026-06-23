@@ -93,6 +93,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: false
 
       - name: 安装系统依赖
         run: |
@@ -281,7 +283,7 @@ jobs:
           key: thinlto-${{ runner.os }}-${{ github.ref_name }}-${{ inputs.manager }}
 
       - name: 保存工具链缓存
-        if: ${{ always() && steps.cache-toolchains.outputs.cache-hit != 'true' && steps.compile.outcome == 'success' }}
+        if: ${{ always() && steps.cache-toolchains.outputs.cache-hit != 'true' && inputs.manager == 'none' }}
         continue-on-error: true
         uses: actions/cache/save@v5
         with:
