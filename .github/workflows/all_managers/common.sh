@@ -337,6 +337,10 @@ __retry_make_Image() {
     python3 "$FIX_SCRIPT" /tmp/make_image.log "$WEAK_RETRY" || true
     rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/kernelsu_retry.o"
     rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/drivers/kernelsu/ksu_weak_stubs.o"
+    # 删除 .*.cmd 缓存文件让 make 重新解析 Makefile 中新增的 obj-y
+    find "$WORKDIR/kernel_workspace/kernel_platform/common/out/drivers/kernelsu" -name ".*.cmd" -delete 2>/dev/null || true
+    find "$WORKDIR/kernel_workspace/kernel_platform/common/out/drivers/kernelsu" -name "built-in.a" -delete 2>/dev/null || true
+    rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/drivers/kernelsu/core/ksu_weak_stubs.o"
     rm -rf "$LDCACHE_DIR" && mkdir -p "$LDCACHE_DIR"
     attempt=$((attempt + 1))
     continue

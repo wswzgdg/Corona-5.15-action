@@ -413,7 +413,18 @@ if not compile_fixes and undef_refs:
     ksu_related = {s for s in undef_refs if re.search(r'ksu|susfs|find_kernel', s, re.I)}
     if ksu_related:
         ksu_dir = os.path.join(COMMON_DIR, 'drivers/kernelsu')
-        stub_c = os.path.join(ksu_dir, 'ksu_weak_stubs.c')
+
+        # Find the best subdirectory to place stubs (core/ is most reliable)
+        stub_dir = ksu_dir
+        for subdir in ['core', '']:
+            candidate = os.path.join(ksu_dir, subdir) if subdir else ksu_dir
+            candidate_mf = os.path.join(candidate, 'Makefile')
+            candidate_kb = os.path.join(candidate, 'Kbuild')
+            if os.path.isdir(candidate) and (os.path.isfile(candidate_mf) or os.path.isfile(candidate_kb)):
+                stub_dir = candidate
+                break
+
+        stub_c = os.path.join(stub_dir, 'ksu_weak_stubs.c')
         with open(stub_c, 'w') as f:
             f.write('/* Auto-generated __weak stubs */\n')
             f.write('#include <linux/types.h>\n')
@@ -421,25 +432,27 @@ if not compile_fixes and undef_refs:
             for sym in sorted(undef_refs):
                 f.write(f'int __weak {sym}(void) {{ return 0; }}\n')
 
-        # Add to KSU Makefile or Kbuild
-        ksu_makefile = os.path.join(ksu_dir, 'Makefile')
-        ksu_kbuild = os.path.join(ksu_dir, 'Kbuild')
+        # Add to the chosen directory's Makefile or Kbuild
         obj_line = "obj-y += ksu_weak_stubs.o"
         added = False
-        for mf_path in [ksu_makefile, ksu_kbuild]:
+        for mf_path in [os.path.join(stub_dir, 'Makefile'), os.path.join(stub_dir, 'Kbuild')]:
             if os.path.isfile(mf_path):
                 with open(mf_path) as mf:
-                    content = mf.read()
-                if obj_line not in content:
+                    mf_content = mf.read()
+                if obj_line not in mf_content:
                     with open(mf_path, 'a') as mf2:
                         mf2.write('\n' + obj_line + '\n')
                 added = True
                 break
+        if not added:
+            # Last resort: create a Makefile in stub_dir
+            with open(os.path.join(stub_dir, 'Makefile'), 'a') as mf2:
+                mf2.write('\n' + obj_line + '\n')
 
         with open(weak_out, 'w') as f:
-            f.write('/* stubs moved to drivers/kernelsu/ksu_weak_stubs.c */\n')
+            f.write('/* stubs moved to ' + os.path.relpath(stub_c, COMMON_DIR) + ' */\n')
 
         link_fixes = True
-        print(f"Generated {len(undef_refs)} weak stubs ({len(ksu_related)} ksu-related) at {ksu_dir}")
+        print(f"Generated {len(undef_refs)} weak stubs ({len(ksu_related)} ksu-related) at {stub_dir}")
 
 sys.exit(0 if (compile_fixes or link_fixes) else 1)
