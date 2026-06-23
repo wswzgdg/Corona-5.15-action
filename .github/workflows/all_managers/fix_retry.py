@@ -57,7 +57,7 @@ FIX_MAP = {
 HEADER_FNS = {'register_kprobe', 'unregister_kprobe',
               'register_kretprobe', 'unregister_kretprobe'}
 
-SKIP_UNDECLARED = {'st_size_ptr', 'filename_user', 'argv_user', 'pending_sucompat', 'p', 't'}
+SKIP_UNDECLARED = {'st_size_ptr', 'filename_user', 'argv_user', 'pending_sucompat'}
 TYPED_VARS = {
     'ret': 'int ret = 0;',
     'regs': 'const struct pt_regs *regs = NULL;',

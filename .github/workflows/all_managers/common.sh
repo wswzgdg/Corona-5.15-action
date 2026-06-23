@@ -346,6 +346,9 @@ __retry_make_Image() {
 }
 
 restore_out_cache
+
+# 编译前应用已知兼容性补丁
+python3 "$WORKDIR/.github/workflows/all_managers/ksu_compat_patches.py" || true
 __retry_make_Image || { echo "编译失败，跳过打包"; exit 1; }
 save_out_cache || true
 
