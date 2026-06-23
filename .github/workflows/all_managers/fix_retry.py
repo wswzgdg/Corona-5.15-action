@@ -21,6 +21,22 @@ def resolve_ksu_source(short_path: str) -> str:
     return os.path.abspath(os.path.join(COMMON_DIR, path))
 
 
+def find_function_end(lines, start):
+    """Find the line index of the closing brace that ends a function starting at `start`."""
+    brace_depth = 0
+    found_open = False
+    for j in range(start, min(start + 300, len(lines))):
+        for ch in lines[j]:
+            if ch == '{':
+                brace_depth += 1
+                found_open = True
+            elif ch == '}':
+                brace_depth -= 1
+        if found_open and brace_depth <= 0:
+            return j
+    return -1
+
+
 # --- Phase 1: Collect undefined symbols ---
 undef_refs = set()
 for m in re.finditer(r"undefined reference to `([a-zA-Z0-9_]+)'", log):
@@ -41,6 +57,14 @@ FIX_MAP = {
 HEADER_FNS = {'register_kprobe', 'unregister_kprobe',
               'register_kretprobe', 'unregister_kretprobe'}
 
+SKIP_UNDECLARED = {'st_size_ptr', 'filename_user', 'argv_user', 'pending_sucompat', 'p', 't'}
+TYPED_VARS = {
+    'ret': 'int ret = 0;',
+    'regs': 'const struct pt_regs *regs = NULL;',
+    'statbuf': 'struct stat *statbuf = NULL;',
+    'ksu_late_loaded': 'extern bool ksu_late_loaded;',
+}
+
 file_errors = defaultdict(list)
 for m in re.finditer(
     r'(?P<file>source/drivers/kernelsu/[\w./-]+\.c):(?P<line>\d+):(?P<col>\d+):\s+error:\s+(?P<msg>.*)',
@@ -57,7 +81,7 @@ for fpath, errs in file_errors.items():
     missing_includes = set()
     missing_externs = set()
     missing_forward = set()
-    needs_local_vars = set()
+    needs_declarations = set()
     msg_text = ' '.join(e['msg'] for e in errs)
 
     # --- 2a. Conflicting types: kernel already declares it ---
@@ -72,26 +96,14 @@ for fpath, errs in file_errors.items():
         if not (0 <= target_line < len(lines)):
             continue
         orig = lines[target_line]
-        if orig.strip().startswith(('/*', '#if 0')):
+        if orig.strip().startswith(('/*', '#if 0', '#endif')):
             continue
-        # Check if this is a function definition (has braces)
-        brace_depth = 0
-        end_brace = -1
-        for j in range(target_line, min(target_line + 200, len(lines))):
-            brace_depth += lines[j].count('{') - lines[j].count('}')
-            if brace_depth <= 0 and j > target_line:
-                end_brace = j
-                break
-            if '{' in lines[j] and j == target_line:
-                continue
-            if '{' in lines[j] and brace_depth > 0:
-                # found opening brace, keep searching for close
-                continue
+        end_brace = find_function_end(lines, target_line)
         if end_brace > target_line:
             lines.insert(end_brace + 1, '#endif\n')
             lines.insert(target_line, f'#if 0 /* fix_retry: kernel already defines {sym} */\n')
         else:
-            lines[target_line] = f'/* fix_retry: kernel already defines {sym} */\n'
+            lines[target_line] = f'/* fix_retry: kernel already defines {sym} */ // ' + orig
         with open(fpath, 'w') as f:
             f.writelines(lines)
         compile_fixes = True
@@ -113,21 +125,13 @@ for fpath, errs in file_errors.items():
             orig = lines[target_line]
             if orig.strip().startswith(('/*', '#if 0', '#endif')):
                 continue
-            # For variable declarations (line ends with ;)
             stripped = orig.strip()
             if stripped.endswith(';') or (stripped.endswith(',') and '{' not in stripped):
                 lines[target_line] = f'/* fix_retry: redefined {sym} */ // ' + orig
                 modified = True
                 print(f"Redef: commented '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
                 continue
-            # For function definitions: wrap in #if 0 / #endif
-            brace_depth = 0
-            end_brace = -1
-            for j in range(target_line, len(lines)):
-                brace_depth += lines[j].count('{') - lines[j].count('}')
-                if brace_depth <= 0 and j > target_line:
-                    end_brace = j
-                    break
+            end_brace = find_function_end(lines, target_line)
             if end_brace > target_line:
                 lines.insert(end_brace + 1, '#endif\n')
                 lines.insert(target_line, f'#if 0 /* fix_retry: {sym} already defined */\n')
@@ -150,7 +154,6 @@ for fpath, errs in file_errors.items():
             lines = f.readlines()
         if 0 <= target_line < len(lines):
             line = lines[target_line]
-            # Pattern: !ksu_su_compat_enabled → !static_key_enabled(&var.key)
             new_line = re.sub(
                 r'!(\w+)\b(?!\s*\()',
                 r'!static_key_enabled(&\1.key)',
@@ -161,77 +164,74 @@ for fpath, errs in file_errors.items():
                 with open(fpath, 'w') as f:
                     f.writelines(lines)
                 compile_fixes = True
-                print(f"Unary: fixed '!{m.group(1)}' ({os.path.basename(fpath)}:{target_line+1})")
+                print(f"Unary: fixed ({os.path.basename(fpath)}:{target_line+1})")
 
     # --- 2c2. StaticKey arithmetic/assignment ---
     for e in errs:
-        if "where arithmetic or pointer type is required" in e['msg'] or \
-           "assigning to 'struct static_key_true' from" in e['msg'] or \
-           "assigning to 'struct static_key_false' from" in e['msg']:
-            target_line = e['line'] - 1
-            with open(fpath) as f:
-                lines = f.readlines()
-            if not (0 <= target_line < len(lines)):
-                continue
-            line = lines[target_line]
-            modified = False
-            # ternary: var ? X : Y → static_key_enabled(&var.key) ? X : Y
+        if "where arithmetic or pointer type is required" not in e['msg'] and \
+           "assigning to 'struct static_key_true' from" not in e['msg'] and \
+           "assigning to 'struct static_key_false' from" not in e['msg']:
+            continue
+        target_line = e['line'] - 1
+        with open(fpath) as f:
+            lines = f.readlines()
+        if not (0 <= target_line < len(lines)):
+            continue
+        line = lines[target_line]
+        done = False
+        # ternary: var ? X : Y → static_key_enabled(&var.key) ? X : Y
+        new_line = re.sub(
+            r'\b(\w+_enabled)\s*\?',
+            r'static_key_enabled(&\1.key) ?',
+            line
+        )
+        if new_line != line:
+            lines[target_line] = new_line
+            done = True
+        if not done:
             new_line = re.sub(
-                r'\b(\w+_enabled)\s*\?',
-                r'static_key_enabled(&\1.key) ?',
+                r'\b(if|while)\s*\(\s*(\w+_enabled)\s*\)',
+                r'\1 (static_key_enabled(&\2.key))',
                 line
             )
             if new_line != line:
                 lines[target_line] = new_line
-                modified = True
-            if not modified:
-                # if (var) or while (var) → if (static_key_enabled(&var.key))
-                new_line = re.sub(
-                    r'\b(if|while)\s*\(\s*(\w+_enabled)\s*\)',
-                    r'\1 (static_key_enabled(&\2.key))',
-                    line
+                done = True
+        if not done:
+            new_line = re.sub(
+                r'\b(\w+_enabled)\s*=\s*true\s*;',
+                r'static_key_enable(&\1.key);',
+                line
+            )
+            if new_line != line:
+                lines[target_line] = new_line
+                done = True
+        if not done:
+            new_line = re.sub(
+                r'\b(\w+_enabled)\s*=\s*false\s*;',
+                r'static_key_disable(&\1.key);',
+                line
+            )
+            if new_line != line:
+                lines[target_line] = new_line
+                done = True
+        if not done:
+            m_assign = re.match(
+                r'^(\s*)\b(\w+_enabled)\s*=\s*(.+?)\s*;',
+                line
+            )
+            if m_assign:
+                indent, var, expr = m_assign.group(1), m_assign.group(2), m_assign.group(3)
+                lines[target_line] = (
+                    f'{indent}if ({expr}) static_key_enable(&{var}.key); '
+                    f'else static_key_disable(&{var}.key);\n'
                 )
-                if new_line != line:
-                    lines[target_line] = new_line
-                    modified = True
-            if not modified:
-                # var = true → static_key_enable(&var.key)
-                new_line = re.sub(
-                    r'\b(\w+_enabled)\s*=\s*true\s*;',
-                    r'static_key_enable(&\1.key);',
-                    line
-                )
-                if new_line != line:
-                    lines[target_line] = new_line
-                    modified = True
-            if not modified:
-                # var = false → static_key_disable(&var.key)
-                new_line = re.sub(
-                    r'\b(\w+_enabled)\s*=\s*false\s*;',
-                    r'static_key_disable(&\1.key);',
-                    line
-                )
-                if new_line != line:
-                    lines[target_line] = new_line
-                    modified = True
-            if not modified:
-                # var = EXPR → if (EXPR) static_key_enable(&var.key); else static_key_disable(&var.key);
-                m_assign = re.match(
-                    r'^(\s*)\b(\w+_enabled)\s*=\s*(.+?)\s*;',
-                    line
-                )
-                if m_assign:
-                    indent, var, expr = m_assign.group(1), m_assign.group(2), m_assign.group(3)
-                    lines[target_line] = (
-                        f'{indent}if ({expr}) static_key_enable(&{var}.key); '
-                        f'else static_key_disable(&{var}.key);\n'
-                    )
-                    modified = True
-            if modified:
-                with open(fpath, 'w') as f:
-                    f.writelines(lines)
-                compile_fixes = True
-                print(f"StaticKey: fixed type usage ({os.path.basename(fpath)}:{target_line+1})")
+                done = True
+        if done:
+            with open(fpath, 'w') as f:
+                f.writelines(lines)
+            compile_fixes = True
+            print(f"StaticKey: fixed type usage ({os.path.basename(fpath)}:{target_line+1})")
 
     # --- 2d. UserArgPtr ---
     for e in errs:
@@ -253,7 +253,25 @@ for fpath, errs in file_errors.items():
                 compile_fixes = True
                 print(f"UserArgPtr: fixed ({os.path.basename(fpath)}:{target_line+1})")
 
-    # --- 2e. Collect missing includes/forward/extern ---
+    # --- 2e. "expected identifier or '('" after fix_retry's own #if 0 ---
+    for e in errs:
+        if "expected identifier or '('" not in e['msg']:
+            continue
+        target_line = e['line'] - 1
+        with open(fpath) as f:
+            lines = f.readlines()
+        if not (0 <= target_line < len(lines)):
+            continue
+        line = lines[target_line].strip()
+        # If error is on a lone '{' or '}' that's leftover from prior fix, comment it out
+        if line in ('{', '}', '};'):
+            lines[target_line] = '/* fix_retry: stray brace */ // ' + lines[target_line]
+            with open(fpath, 'w') as f:
+                f.writelines(lines)
+            compile_fixes = True
+            print(f"StrayBrace: commented ({os.path.basename(fpath)}:{target_line+1})")
+
+    # --- 2f. Collect missing includes/forward/extern ---
     for struct_name, include in FIX_MAP.items():
         if re.search(r'\b' + re.escape(struct_name) + r'\b', msg_text):
             missing_includes.add(include)
@@ -267,11 +285,10 @@ for fpath, errs in file_errors.items():
         m = re.search(r"use of undeclared identifier '(\w+)'", e['msg'])
         if m:
             sym = m.group(1)
-            if sym in ('st_size_ptr', 'filename_user', 'argv_user', 'pending_sucompat',
-                       'p', 't'):
+            if sym in SKIP_UNDECLARED:
                 continue
-            if sym in ('ret', 'regs', 'statbuf'):
-                needs_local_vars.add(sym)
+            if sym in TYPED_VARS:
+                needs_declarations.add(TYPED_VARS[sym])
             else:
                 missing_externs.add(sym)
 
@@ -283,7 +300,7 @@ for fpath, errs in file_errors.items():
                 if s == sn:
                     missing_includes.add(inc)
 
-    if not (missing_includes or missing_forward or missing_externs or needs_local_vars):
+    if not (missing_includes or missing_forward or missing_externs or needs_declarations):
         continue
 
     with open(fpath) as f:
@@ -298,16 +315,14 @@ for fpath, errs in file_errors.items():
         insert.append(f'{fn}\n')
     for sym in sorted(missing_externs):
         insert.append(f'extern int {sym};\n')
+    for decl in sorted(needs_declarations):
+        if decl.startswith('extern'):
+            insert.append(f'{decl}\n')
 
-    if needs_local_vars:
-        local_parts = []
-        if 'ret' in needs_local_vars:
-            local_parts.append('int ret;')
-        if 'regs' in needs_local_vars:
-            local_parts.append('const struct pt_regs *regs = NULL;')
-        if 'statbuf' in needs_local_vars:
-            local_parts.append('struct stat *statbuf = NULL;')
-        local_line = ' '.join(local_parts) + '\n'
+    # Local variable declarations go inside the first function body
+    local_decls = [d for d in needs_declarations if not d.startswith('extern')]
+    if local_decls:
+        local_line = ' '.join(local_decls) + '\n'
         brace_count = 0
         injected = False
         for i, line in enumerate(lines):
@@ -335,7 +350,7 @@ for fpath, errs in file_errors.items():
     compile_fixes = True
     print(f"Fixed {os.path.basename(fpath)}: "
           f"{len(missing_includes)}i {len(missing_forward)}f {len(missing_externs)}e "
-          f"local={needs_local_vars}")
+          f"decl={len(needs_declarations)}")
 
 
 # --- Phase 3: Duplicate symbols → __weak ---
@@ -343,7 +358,7 @@ dup_syms = set()
 dup_locations = {}
 for m in re.finditer(r"ld.lld: error: duplicate symbol: (\w+)\n>>> defined in [^\n]*?(\w+)\.o\)\n>>> defined in [^\n]*?(\w+)\.o\)", log):
     dup_syms.add(m.group(1))
-    dup_locations[m.group(1)] = m.group(3)  # second .o file
+    dup_locations[m.group(1)] = m.group(3)
 if not dup_syms:
     for m in re.finditer(r"ld.lld: error: duplicate symbol: (\w+)", log):
         dup_syms.add(m.group(1))
@@ -357,7 +372,6 @@ if dup_syms:
                 ksu_sources.append(os.path.join(root, fname))
 
     for sym in dup_syms:
-        # Prefer the second definition location if known
         preferred = dup_locations.get(sym)
         search_files = ksu_sources
         if preferred:
@@ -365,12 +379,14 @@ if dup_syms:
             if pref_files:
                 search_files = pref_files
 
+        found = False
         for fpath in search_files:
             with open(fpath) as f:
                 clines = f.readlines()
             was_modified = False
             for i, cline in enumerate(clines):
                 if sym in cline and '__weak' not in cline and '#if 0' not in cline:
+                    # Match function definition or variable definition
                     new_line = re.sub(
                         r'^(\s*)((?:static\s+)?(?:inline\s+)?[\w]+(?:\s+\*?\s*)?)(' + re.escape(sym) + r'\b)',
                         r'\1__weak \2\3', cline
@@ -384,30 +400,46 @@ if dup_syms:
                     f.writelines(clines)
                 compile_fixes = True
                 print(f"Duplicate: __weak '{sym}' ({os.path.basename(fpath)})")
+                found = True
                 break
+        if not found:
+            # Fallback: search ALL kernel source (duplicate may be between KSU and kernel)
+            # Just mark it for Phase 4 stubs
+            undef_refs.discard(sym)
 
 
 # --- Phase 4: Weak stubs for remaining undefined symbols ---
 if not compile_fixes and undef_refs:
     ksu_related = {s for s in undef_refs if re.search(r'ksu|susfs|find_kernel', s, re.I)}
     if ksu_related:
-        with open(weak_out, 'w') as f:
+        ksu_dir = os.path.join(COMMON_DIR, 'drivers/kernelsu')
+        stub_c = os.path.join(ksu_dir, 'ksu_weak_stubs.c')
+        with open(stub_c, 'w') as f:
             f.write('/* Auto-generated __weak stubs */\n')
             f.write('#include <linux/types.h>\n')
             f.write('#include <linux/jump_label.h>\n')
             for sym in sorted(undef_refs):
                 f.write(f'int __weak {sym}(void) {{ return 0; }}\n')
 
-        # Write Makefile entry in common/ (ONE dirname, not two!)
-        common_dir = os.path.dirname(os.path.abspath(weak_out))
-        makefile = os.path.join(common_dir, "Makefile")
-        obj_line = "obj-y += kernelsu_retry.o"
-        if os.path.isfile(makefile):
-            with open(makefile) as mf:
-                if obj_line not in mf.read():
-                    with open(makefile, "a") as mf2:
-                        mf2.write(obj_line + "\n")
+        # Add to KSU Makefile or Kbuild
+        ksu_makefile = os.path.join(ksu_dir, 'Makefile')
+        ksu_kbuild = os.path.join(ksu_dir, 'Kbuild')
+        obj_line = "obj-y += ksu_weak_stubs.o"
+        added = False
+        for mf_path in [ksu_makefile, ksu_kbuild]:
+            if os.path.isfile(mf_path):
+                with open(mf_path) as mf:
+                    content = mf.read()
+                if obj_line not in content:
+                    with open(mf_path, 'a') as mf2:
+                        mf2.write('\n' + obj_line + '\n')
+                added = True
+                break
+
+        with open(weak_out, 'w') as f:
+            f.write('/* stubs moved to drivers/kernelsu/ksu_weak_stubs.c */\n')
+
         link_fixes = True
-        print(f"Generated {len(undef_refs)} weak stubs ({len(ksu_related)} ksu-related) at {common_dir}")
+        print(f"Generated {len(undef_refs)} weak stubs ({len(ksu_related)} ksu-related) at {ksu_dir}")
 
 sys.exit(0 if (compile_fixes or link_fixes) else 1)

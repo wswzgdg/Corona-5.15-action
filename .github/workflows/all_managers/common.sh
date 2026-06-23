@@ -331,7 +331,8 @@ __retry_make_Image() {
     fi
     export WORKDIR="$WORKDIR"
     python3 "$FIX_SCRIPT" /tmp/make_image.log "$WEAK_RETRY" || true
-    rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/kernelsu_retry.o"
+    rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/kernelsu_retry.o"
+    rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/drivers/kernelsu/ksu_weak_stubs.o"
     rm -rf "$LDCACHE_DIR" && mkdir -p "$LDCACHE_DIR"
     attempt=$((attempt + 1))
     continue
