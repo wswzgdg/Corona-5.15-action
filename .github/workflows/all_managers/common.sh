@@ -230,7 +230,7 @@ if [ "$MANAGER" != "none" ]; then
     if [ "$MANAGER" = "resukisu" ] && [ -n "$VERSION_NAME_FULL" ]; then
       echo "CONFIG_KSU_FULL_NAME_FORMAT=\"%TAG_NAME%-${VERSION_NAME_FULL}\""
     fi
-    if [ "$USE_KPN" != "true" ] && { [ "$MANAGER" = "sukisu" ] || [ "$MANAGER" = "resukisu" ]; }; then
+    if [ "$USE_KPN" != "true" ] && [ "$MANAGER" = "sukisu" ]; then
       echo "CONFIG_KPM=y"
     fi
   } >> "$DEFCONFIG"

@@ -25,13 +25,17 @@ prepare_anykernel_tree() {
   local ak3_url="$3"
   local corona_url="$4"
 
-  if [ "$use_kpn" = "true" ] && [ "$manager" != "none" ]; then
+  # resukisu 强制走 KPN（已移除内置 KPM 支持）
+  local effective_kpn="$use_kpn"
+  [ "$manager" = "resukisu" ] && effective_kpn="true"
+
+  if [ "$effective_kpn" = "true" ] && [ "$manager" != "none" ]; then
     git clone -b kp-n "$ak3_url" --depth=1 AnyKernel3
     mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
     curl -fL https://github.com/KernelSU-Next/KPatch-Next/releases/latest/download/kptools-android -o ./AnyKernel3/patch/kptools
     curl -fL https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/latest/download/kpimg -o ./AnyKernel3/patch/kpimg
     curl -fL https://github.com/cctv18/KPatch-Next/releases/latest/download/kpn.zip -o ./AnyKernel3/module/kpn.zip
-  elif [ "$use_kpn" != "true" ] && { [ "$manager" = "sukisu" ] || [ "$manager" = "resukisu" ]; }; then
+  elif [ "$effective_kpn" != "true" ] && [ "$manager" = "sukisu" ]; then
     git clone -b kpm "$ak3_url" --depth=1 AnyKernel3
     mkdir -p ./AnyKernel3/patch ./AnyKernel3/module
     local patch_url=""
