@@ -405,7 +405,7 @@ jobs:
       max-parallel: 1
       fail-fast: false
       matrix:
-        susfs: ${{ inputs.build_susfs == 'both' && fromJSON('[true, false]') || (inputs.build_susfs == 'true' && fromJSON('[true]') || fromJSON('[false]')) }}
+        susfs: [false]
     uses: ./.github/workflows/kernel-build.yml
     with:
       manager: none
