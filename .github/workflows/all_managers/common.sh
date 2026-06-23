@@ -170,7 +170,6 @@ case "$MANAGER" in
     ;;
   kowsu)
     curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
-    bash "$WORKDIR/.github/workflows/all_managers/kowsu_patches.sh" "$WORKDIR/kernel_workspace/kernel_platform/common/drivers/kernelsu"
     ;;
   none)
     ;;

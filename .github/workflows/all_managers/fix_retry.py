@@ -175,16 +175,26 @@ for fpath, errs in file_errors.items():
                 continue
             line = lines[target_line]
             modified = False
-            # if (var) or while (var) → if (static_key_enabled(&var.key))
+            # ternary: var ? X : Y → static_key_enabled(&var.key) ? X : Y
             new_line = re.sub(
-                r'\b(if|while)\s*\(\s*(\w+_enabled)\s*\)',
-                r'\1 (static_key_enabled(&\2.key))',
+                r'\b(\w+_enabled)\s*\?',
+                r'static_key_enabled(&\1.key) ?',
                 line
             )
             if new_line != line:
                 lines[target_line] = new_line
                 modified = True
-            else:
+            if not modified:
+                # if (var) or while (var) → if (static_key_enabled(&var.key))
+                new_line = re.sub(
+                    r'\b(if|while)\s*\(\s*(\w+_enabled)\s*\)',
+                    r'\1 (static_key_enabled(&\2.key))',
+                    line
+                )
+                if new_line != line:
+                    lines[target_line] = new_line
+                    modified = True
+            if not modified:
                 # var = true → static_key_enable(&var.key)
                 new_line = re.sub(
                     r'\b(\w+_enabled)\s*=\s*true\s*;',
@@ -194,16 +204,29 @@ for fpath, errs in file_errors.items():
                 if new_line != line:
                     lines[target_line] = new_line
                     modified = True
-                else:
-                    # var = false → static_key_disable(&var.key)
-                    new_line = re.sub(
-                        r'\b(\w+_enabled)\s*=\s*false\s*;',
-                        r'static_key_disable(&\1.key);',
-                        line
+            if not modified:
+                # var = false → static_key_disable(&var.key)
+                new_line = re.sub(
+                    r'\b(\w+_enabled)\s*=\s*false\s*;',
+                    r'static_key_disable(&\1.key);',
+                    line
+                )
+                if new_line != line:
+                    lines[target_line] = new_line
+                    modified = True
+            if not modified:
+                # var = EXPR → if (EXPR) static_key_enable(&var.key); else static_key_disable(&var.key);
+                m_assign = re.match(
+                    r'^(\s*)\b(\w+_enabled)\s*=\s*(.+?)\s*;',
+                    line
+                )
+                if m_assign:
+                    indent, var, expr = m_assign.group(1), m_assign.group(2), m_assign.group(3)
+                    lines[target_line] = (
+                        f'{indent}if ({expr}) static_key_enable(&{var}.key); '
+                        f'else static_key_disable(&{var}.key);\n'
                     )
-                    if new_line != line:
-                        lines[target_line] = new_line
-                        modified = True
+                    modified = True
             if modified:
                 with open(fpath, 'w') as f:
                     f.writelines(lines)
