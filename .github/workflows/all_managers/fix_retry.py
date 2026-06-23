@@ -244,7 +244,8 @@ for fpath, errs in file_errors.items():
         m = re.search(r"use of undeclared identifier '(\w+)'", e['msg'])
         if m:
             sym = m.group(1)
-            if sym in ('st_size_ptr', 'filename_user', 'argv_user', 'pending_sucompat'):
+            if sym in ('st_size_ptr', 'filename_user', 'argv_user', 'pending_sucompat',
+                       'p', 't'):
                 continue
             if sym in ('ret', 'regs', 'statbuf'):
                 needs_local_vars.add(sym)
