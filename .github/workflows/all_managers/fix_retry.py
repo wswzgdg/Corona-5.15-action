@@ -78,52 +78,48 @@ for fpath, errs in file_errors.items():
                 print(f"Conflict: removed KSU '{sym}' ({os.path.basename(fpath)}:{idx+1})")
                 break
 
-    # --- 2b. Redefinition: ALL in one pass (no break) ---
+    # --- 2b. Redefinition: comment out or #if 0 the duplicate ---
+    redef_syms = []
     for e in errs:
         m = re.search(r"redefinition of '(\w+)'", e['msg'])
-        if not m:
-            continue
-        sym = m.group(1)
-        target_line = e['line'] - 1
+        if m:
+            redef_syms.append((m.group(1), e['line'] - 1))
+    if redef_syms:
         with open(fpath) as f:
             lines = f.readlines()
-        if not (0 <= target_line < len(lines)):
-            continue
-        orig = lines[target_line]
-        if orig.strip().startswith(('/*', '*', '__weak')):
-            continue
-        # Try __weak for variable declarations (ends with ; or ,)
-        stripped = orig.strip()
-        if stripped.endswith(';') or stripped.endswith(','):
-            new_line = re.sub(
-                r'^(\s*)((?:static\s+)?(?:inline\s+)?\w+(?:\s+\*?)?)(' + re.escape(sym) + r'\b)',
-                r'\1__weak \2 \3', orig
-            )
-            if new_line != orig:
-                lines[target_line] = new_line
-                with open(fpath, 'w') as f:
-                    f.writelines(lines)
-                compile_fixes = True
-                print(f"Redef: __weak '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
+        modified = False
+        for sym, target_line in sorted(redef_syms, key=lambda x: x[1], reverse=True):
+            if not (0 <= target_line < len(lines)):
                 continue
-        # Fallback: #if 0 / #endif for function definitions
-        # Find matching braces
-        brace_depth = 0
-        end_brace = -1
-        for j in range(target_line, len(lines)):
-            brace_depth += lines[j].count('{') - lines[j].count('}')
-            if brace_depth <= 0 and j > target_line:
-                end_brace = j
-                break
-        if end_brace > target_line:
-            lines[target_line] = f'#if 0 /* fix_retry: SUSFS already defines {sym} */\n'
-            lines[end_brace] = '#endif\n'
-        else:
-            lines[target_line] = f'/* fix_retry: SUSFS already defines {sym} */\n'
-        with open(fpath, 'w') as f:
-            f.writelines(lines)
-        compile_fixes = True
-        print(f"Redef: #if 0 '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
+            orig = lines[target_line]
+            if orig.strip().startswith(('/*', '#if 0', '#endif')):
+                continue
+            # For variable declarations (line ends with ;)
+            stripped = orig.strip()
+            if stripped.endswith(';') or (stripped.endswith(',') and '{' not in stripped):
+                lines[target_line] = f'/* fix_retry: redefined {sym} */ // ' + orig
+                modified = True
+                print(f"Redef: commented '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
+                continue
+            # For function definitions: wrap in #if 0 / #endif
+            brace_depth = 0
+            end_brace = -1
+            for j in range(target_line, len(lines)):
+                brace_depth += lines[j].count('{') - lines[j].count('}')
+                if brace_depth <= 0 and j > target_line:
+                    end_brace = j
+                    break
+            if end_brace > target_line:
+                lines.insert(end_brace + 1, '#endif\n')
+                lines.insert(target_line, f'#if 0 /* fix_retry: {sym} already defined */\n')
+            else:
+                lines[target_line] = f'/* fix_retry: redefined {sym} */ // ' + orig
+            modified = True
+            print(f"Redef: #if 0 '{sym}' ({os.path.basename(fpath)}:{target_line+1})")
+        if modified:
+            with open(fpath, 'w') as f:
+                f.writelines(lines)
+            compile_fixes = True
 
     # --- 2c. StaticKey unary '!' ---
     for e in errs:
