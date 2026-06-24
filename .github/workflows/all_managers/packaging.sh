@@ -68,11 +68,30 @@ print(matches[0] if matches else "")')
 
   rm -rf ./AnyKernel3/.git
   rm -f ./AnyKernel3/module/Corona.zip
-  git clone "$corona_url" --depth=1 ./AnyKernel3/module/Corona
-  rm -rf ./AnyKernel3/module/Corona/.git
-  rm -f ./AnyKernel3/module/Corona/LICENSE ./AnyKernel3/module/Corona/README.md
-  (cd ./AnyKernel3/module/Corona && zip -r ../Corona.zip ./*)
-  rm -rf ./AnyKernel3/module/Corona
+  local corona_zip_url=""
+  local corona_api_resp=""
+  local corona_auth_args=()
+  [ -n "${GITHUB_TOKEN:-}" ] && corona_auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+  for _try in 1 2 3; do
+    corona_api_resp=$(curl -fsSL --retry 3 --retry-delay 5 \
+      -H "Accept: application/vnd.github+json" \
+      "${corona_auth_args[@]}" \
+      "https://api.github.com/repos/Corona-oplus-kernel/Corona_module/releases/latest" || true)
+    corona_zip_url=$(printf '%s' "$corona_api_resp" | python3 -c 'import json,sys
+try:
+  data=json.load(sys.stdin)
+except Exception:
+  sys.exit(0)
+assets=data.get("assets",[]) if isinstance(data,dict) else []
+matches=[a.get("browser_download_url","") for a in assets if a.get("name","").endswith(".zip")]
+print(matches[0] if matches else "")')
+    [ -n "$corona_zip_url" ] && break
+    sleep $((_try * 5))
+  done
+  if [ -z "$corona_zip_url" ]; then
+    corona_zip_url="${corona_url}/releases/latest/download/Corona.zip"
+  fi
+  curl -fL --retry 3 --retry-delay 5 "$corona_zip_url" -o ./AnyKernel3/module/Corona.zip
 }
 
 # Copy the built Image into AnyKernel3 and emit the final zip name.
