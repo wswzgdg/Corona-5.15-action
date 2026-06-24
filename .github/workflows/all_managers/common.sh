@@ -153,18 +153,18 @@ cd "$WORKDIR/kernel_workspace/kernel_platform/common"
 
 case "$MANAGER" in
   sukisu)
-    curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/dev/kernel/setup.sh" | bash -s dev
+    curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/refs/heads/dev/kernel/setup.sh" | bash -s main
     if [ -n "$VERSION_NAME_FULL" ] && [ -f "./KernelSU/kernel/Kbuild" ]; then
       sed -i 's|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $(if $(call git_short_sha),v$(VERSION_TAG)-'"$VERSION_NAME_FULL"',v$(VERSION_TAG)-$(REPO_NAME)-unknown@unknown)|' ./KernelSU/kernel/Kbuild
     fi
     ;;
   resukisu)
-    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/dev/kernel/setup.sh" | bash -s dev
+    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/dev/kernel/setup.sh" | bash -s main
     ;;
   ksunext)
     ksu_branch="dev"
     [ "$SUSFS_MODE" = "on" ] && ksu_branch="dev-susfs"
-    curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/${ksu_branch}/kernel/setup.sh" | bash -s "$ksu_branch"
+    curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s dev
     ;;
   ksu)
     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
