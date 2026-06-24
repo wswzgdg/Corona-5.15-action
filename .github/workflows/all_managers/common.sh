@@ -211,8 +211,6 @@ fi
 if [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ] && [ -d "./common/KernelSU" ]; then
   if grep -rq CONFIG_KSU_SUSFS ./common/KernelSU/kernel/ 2>/dev/null; then
     echo "KSU 源码已自带 SUSFS 集成，跳过 compat patch"
-  elif grep -q "hook/lsm_hook.o" ./common/KernelSU/kernel/Kbuild 2>/dev/null; then
-    echo "KSU 源码含独立 hook 架构（如 SukiSU），跳过不兼容的 compat patch"
   else
     cp ./susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./common/KernelSU/
     cd "$WORKDIR/kernel_workspace/kernel_platform/common/KernelSU"
