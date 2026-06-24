@@ -167,7 +167,7 @@ case "$MANAGER" in
     curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/${ksu_branch}/kernel/setup.sh" | bash -s "$ksu_branch"
     ;;
   ksu)
-    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s dev
+    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh" | bash -s main
     ;;
   kowsu)
     curl -LSs "https://raw.githubusercontent.com/KOWX712/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
