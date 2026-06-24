@@ -229,6 +229,19 @@ if [ "$MANAGER" != "none" ]; then
     if [ "$SUSFS_MODE" = "on" ]; then
       echo "CONFIG_KSU_SUSFS=y"
       echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
+      echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y"
+      echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y"
+      echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y"
+      echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+      echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y"
+      echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+      echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
+      echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+      echo "CONFIG_KSU_SUSFS_SUS_MAP=y"
     fi
     if [ "$MANAGER" = "resukisu" ] && [ -n "$VERSION_NAME_FULL" ]; then
       echo "CONFIG_KSU_FULL_NAME_FORMAT=\"%TAG_NAME%-${VERSION_NAME_FULL}\""
@@ -317,6 +330,15 @@ MAKE_ARGS=(
 )
 
 make "${MAKE_ARGS[@]}" gki_defconfig
+
+# ---- SUSFS defconfig 验证 ----
+if [ "$MANAGER" != "none" ] && [ "$SUSFS_MODE" = "on" ]; then
+  if ! grep -q "^CONFIG_KSU_SUSFS=y" ./out/.config; then
+    echo "::error::CONFIG_KSU_SUSFS=y 未在生成的 .config 中找到，SUSFS 启用失败"
+    exit 1
+  fi
+  echo "SUSFS defconfig 验证通过: CONFIG_KSU_SUSFS=y 已启用"
+fi
 
 # 置空 retry 源文件，fix_retry.py 在链接失败时动态生成
 : > "$WORKDIR/kernel_workspace/kernel_platform/common/kernelsu_retry.c"
