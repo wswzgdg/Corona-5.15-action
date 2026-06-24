@@ -8,6 +8,7 @@ USE_KPN="${4:-false}"
 VERSION_NAME_RAW="${5:-eternitylonely}"
 LLVM_CLANG_VERSION="${CLANG_VERSION:-22}"
 WORKDIR="$(pwd)"
+export WORKDIR
 
 source "$WORKDIR/.github/workflows/all_managers/toolchain.sh"
 
@@ -333,7 +334,6 @@ __retry_make_Image() {
       echo "Image 编译成功"
       return 0
     fi
-    export WORKDIR="$WORKDIR"
     python3 "$FIX_SCRIPT" /tmp/make_image.log "$WEAK_RETRY" || true
     rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/kernelsu_retry.o"
     rm -f "$WORKDIR/kernel_workspace/kernel_platform/common/out/drivers/kernelsu/ksu_weak_stubs.o"
