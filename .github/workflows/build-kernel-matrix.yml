@@ -11,7 +11,7 @@ on:
         description: "编译 SukiSU"
         required: true
         type: boolean
-        default: true
+        default: false
       build_resukisu:
         description: "编译 ReSukiSU"
         required: true
@@ -21,7 +21,7 @@ on:
         description: "编译 KSUNEXT"
         required: true
         type: boolean
-        default: false
+        default: true
       build_ksu:
         description: "编译 KSU"
         required: true
@@ -46,7 +46,7 @@ on:
         description: "启用 SUSFS"
         required: true
         type: choice
-        default: 'true'
+        default: 'both'
         options:
           - 'false'
           - 'true'
@@ -87,7 +87,7 @@ on:
         description: "KSU 版本名主体"
         required: false
         type: string
-        default: "SEX"
+        default: "old_logs"
       kernel_suffix:
         description: "设置内核后缀"
         required: false
