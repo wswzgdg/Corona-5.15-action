@@ -531,6 +531,9 @@ jobs:
           BUILD_DROIDSPACES: ${{ inputs.droidspaces_enable }}
           BUILD_ANDROID_RELEASE: ${{ inputs.android_release }}
           BUILD_USE_KPN: ${{ inputs.use_kpn }}
+          BUILD_CLANG_VERSION: ${{ inputs.clang_version }}
+          BUILD_VERSION_NAME: ${{ inputs.version_name }}
+          BUILD_KERNEL_SUFFIX: ${{ inputs.kernel_suffix }}
         run: |
           python3 .github/workflows/all_managers/release_metadata.py generate-release-body
 

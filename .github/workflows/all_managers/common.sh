@@ -376,5 +376,5 @@ if [ -z "${SKIP_PACKAGE:-}" ]; then
   rm -rf AnyKernel3
 fi
 
-# 清理 kernel_workspace/.git 避免 actions/checkout post-cleanup 的 submodule 误报
-rm -rf "$WORKDIR/kernel_workspace/.git"
+# 清理所有嵌套 .git 目录，避免 actions/checkout post-cleanup 的 submodule 误报
+find "$WORKDIR/kernel_workspace" -name ".git" -type d -exec rm -rf {} + 2>/dev/null || true

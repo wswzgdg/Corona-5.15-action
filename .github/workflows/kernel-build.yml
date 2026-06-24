@@ -317,6 +317,6 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: clang-meta
+          name: clang-meta-${{ inputs.manager }}
           path: ${{ github.workspace }}/clang_meta/version.txt
 

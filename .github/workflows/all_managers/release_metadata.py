@@ -249,7 +249,15 @@ def build_repo_entry(repo_tuple):
 def build_current_meta(selected_managers, successful_managers):
     """Build the current source snapshot that will be rendered and persisted."""
     current = {
-        '_build': {'susfs': get_susfs_label(), 'kpn': get_kpn_label(), 'droidspaces': ('on' if os.environ.get('BUILD_DROIDSPACES', 'true').lower() == 'true' else 'off'), 'android': os.environ.get('BUILD_ANDROID_RELEASE', '16')},
+        '_build': {
+            'susfs': get_susfs_label(),
+            'kpn': get_kpn_label(),
+            'droidspaces': 'on' if os.environ.get('BUILD_DROIDSPACES', 'true').lower() == 'true' else 'off',
+            'android': os.environ.get('BUILD_ANDROID_RELEASE', '16'),
+            'clang': os.environ.get('BUILD_CLANG_VERSION', ''),
+            'version_name': os.environ.get('BUILD_VERSION_NAME', ''),
+            'kernel_suffix': os.environ.get('BUILD_KERNEL_SUFFIX', ''),
+        },
         '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
         '_ak3': {'repos': []},
     }
@@ -431,7 +439,21 @@ def build_release_lines(previous_meta, current_meta):
     kpn_label = build_meta.get('kpn', get_kpn_label())
     droidspaces_label = build_meta.get('droidspaces', 'on')
     android_label = build_meta.get('android', '16')
-    lines = [f'## 构建选项', '', f'- Android: {android_label}', f'- SUSFS: {susfs_label}', f'- Droidspaces: {droidspaces_label}', f'- KP-N: {kpn_label}', '', '## 源码变更', '']
+    clang_label = build_meta.get('clang', '')
+    version_name = build_meta.get('version_name', '')
+    kernel_suffix = build_meta.get('kernel_suffix', '')
+    lines = ['## 构建选项', '']
+    lines.append(f'- Android: {android_label}')
+    lines.append(f'- SUSFS: {susfs_label}')
+    lines.append(f'- Droidspaces: {droidspaces_label}')
+    lines.append(f'- KP-N: {kpn_label}')
+    if clang_label:
+        lines.append(f'- Clang: {clang_label}')
+    if version_name:
+        lines.append(f'- 版本名: {version_name}')
+    if kernel_suffix:
+        lines.append(f'- 内核后缀: {kernel_suffix}')
+    lines.extend(['', '## 源码变更', ''])
     append_common_section(lines, current_meta, previous_meta)
     append_ak3_section(lines, current_meta, previous_meta)
     append_manager_section(lines, current_meta, previous_meta)
