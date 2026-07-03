@@ -219,6 +219,16 @@ if [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ] && [ -d "./common/Kernel
   fi
 fi
 
+# ---- 工作流构建编号节点 ----
+WORKFLOW_BUILD_PATCH="$WORKDIR/lib/99_add_workflow_build_node.patch"
+if [ -f "$WORKFLOW_BUILD_PATCH" ]; then
+  TMP_WORKFLOW_PATCH="$WORKDIR/kernel_workspace/kernel_platform/99_add_workflow_build_node.patch"
+  sed "s/__CORONA_WORKFLOW_RUN_NUMBER__/${GITHUB_RUN_NUMBER:-0}/g" "$WORKFLOW_BUILD_PATCH" > "$TMP_WORKFLOW_PATCH"
+  cd "$WORKDIR/kernel_workspace/kernel_platform/common"
+  patch -N -p1 -F 3 < "$TMP_WORKFLOW_PATCH" || true
+  cd "$WORKDIR/kernel_workspace/kernel_platform"
+fi
+
 # ---- defconfig 配置 ----
 DEFCONFIG=./common/arch/arm64/configs/gki_defconfig
 if [ "$MANAGER" != "none" ]; then

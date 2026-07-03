@@ -1,0 +1,31 @@
+diff --git a/fs/proc/version.c b/fs/proc/version.c
+index 53b252fe3b95..c7d8223f0f00 100644
+--- a/fs/proc/version.c
++++ b/fs/proc/version.c
+@@ -5,6 +5,8 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ #include <linux/utsname.h>
++
++#define CORONA_WORKFLOW_BUILD_ID "__CORONA_WORKFLOW_RUN_NUMBER__"
+ 
+ static int version_proc_show(struct seq_file *m, void *v)
+ {
+@@ -14,8 +16,16 @@ static int version_proc_show(struct seq_file *m, void *v)
+ 	return 0;
+ }
+ 
++static int corona_workflow_build_proc_show(struct seq_file *m, void *v)
++{
++	seq_puts(m, CORONA_WORKFLOW_BUILD_ID "\n");
++	return 0;
++}
++
+ static int __init proc_version_init(void)
+ {
+ 	proc_create_single("version", 0, NULL, version_proc_show);
++	proc_create_single("corona_workflow_build", 0444, NULL,
++			   corona_workflow_build_proc_show);
+ 	return 0;
+ }
+ fs_initcall(proc_version_init);
