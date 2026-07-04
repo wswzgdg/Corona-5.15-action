@@ -220,13 +220,22 @@ if [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ] && [ -d "./common/Kernel
 fi
 
 # ---- 工作流构建编号节点 ----
-WORKFLOW_BUILD_PATCH="$WORKDIR/lib/99_patch_proc_corona_build_id.patch"
-if [ -f "$WORKFLOW_BUILD_PATCH" ]; then
-  TMP_WORKFLOW_PATCH="$WORKDIR/kernel_workspace/kernel_platform/99_patch_proc_corona_build_id.patch"
-  sed "s/__CORONA_WORKFLOW_RUN_NUMBER__/${GITHUB_RUN_NUMBER:-0}/g" "$WORKFLOW_BUILD_PATCH" > "$TMP_WORKFLOW_PATCH"
-  cd "$WORKDIR/kernel_workspace/kernel_platform/common"
-  patch -N -p1 -F 3 < "$TMP_WORKFLOW_PATCH" || true
-  cd "$WORKDIR/kernel_workspace/kernel_platform"
+CORONA_NODE_SRC="$WORKDIR/kernel_workspace/kernel_platform/common/drivers/block/kernel_node/corona_detect.c"
+if [ -f "$CORONA_NODE_SRC" ]; then
+  python3 - "$CORONA_NODE_SRC" "${GITHUB_RUN_NUMBER:-0}" <<'PYBUILD'
+from pathlib import Path
+import sys
+import re
+path = Path(sys.argv[1])
+run_number = sys.argv[2]
+text = path.read_text(encoding='utf-8')
+if '#define CORONA_WORKFLOW_BUILD_ID' not in text:
+    text = text.replace('#define CORONA_NODE "corona"\n', '#define CORONA_WORKFLOW_BUILD_ID "{}"\n#define CORONA_NODE "corona"\n'.format(run_number), 1)
+else:
+    text = re.sub(r'#define CORONA_WORKFLOW_BUILD_ID ".*?"', '#define CORONA_WORKFLOW_BUILD_ID "{}"'.format(run_number), text, count=1)
+text = text.replace('seq_puts(m, "1\\n");', 'seq_puts(m, CORONA_WORKFLOW_BUILD_ID "\\n");', 1)
+path.write_text(text, encoding='utf-8')
+PYBUILD
 fi
 
 # ---- defconfig 配置 ----
