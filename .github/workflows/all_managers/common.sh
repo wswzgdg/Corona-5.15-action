@@ -220,9 +220,9 @@ if [ "$SUSFS_MODE" = "on" ] && [ "$MANAGER" != "none" ] && [ -d "./common/Kernel
 fi
 
 # ---- 工作流构建编号节点 ----
-WORKFLOW_BUILD_PATCH="$WORKDIR/lib/99_add_workflow_build_node.patch"
+WORKFLOW_BUILD_PATCH="$WORKDIR/lib/99_patch_proc_corona_build_id.patch"
 if [ -f "$WORKFLOW_BUILD_PATCH" ]; then
-  TMP_WORKFLOW_PATCH="$WORKDIR/kernel_workspace/kernel_platform/99_add_workflow_build_node.patch"
+  TMP_WORKFLOW_PATCH="$WORKDIR/kernel_workspace/kernel_platform/99_patch_proc_corona_build_id.patch"
   sed "s/__CORONA_WORKFLOW_RUN_NUMBER__/${GITHUB_RUN_NUMBER:-0}/g" "$WORKFLOW_BUILD_PATCH" > "$TMP_WORKFLOW_PATCH"
   cd "$WORKDIR/kernel_workspace/kernel_platform/common"
   patch -N -p1 -F 3 < "$TMP_WORKFLOW_PATCH" || true

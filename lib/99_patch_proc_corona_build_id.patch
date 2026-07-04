@@ -1,0 +1,18 @@
+diff --git a/drivers/block/kernel_node/corona_detect.c b/drivers/block/kernel_node/corona_detect.c
+--- a/drivers/block/kernel_node/corona_detect.c
++++ b/drivers/block/kernel_node/corona_detect.c
+@@ -2,11 +2,13 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ 
++#define CORONA_WORKFLOW_BUILD_ID "__CORONA_WORKFLOW_RUN_NUMBER__"
++
+ #define CORONA_NODE "corona"
+ 
+ static int corona_show(struct seq_file *m, void *v)
+ {
+-    seq_puts(m, "1\n");
++    seq_puts(m, CORONA_WORKFLOW_BUILD_ID "\n");
+     return 0;
+ }
+ 
