@@ -493,15 +493,18 @@ jobs:
         if: ${{ steps.release_zips_check.outputs.has_zips == 'true' }}
         id: previous_release
         uses: actions/github-script@v8
+        env:
+          CURRENT_TAG: all-managers-${{ github.run_id }}
         with:
           script: |
             try {
+              const currentTag = process.env.CURRENT_TAG || '';
               const { data: releases } = await github.rest.repos.listReleases({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 per_page: 20,
               });
-              const stable = releases.find(r => !r.prerelease && !r.draft);
+              const stable = releases.find(r => !r.prerelease && !r.draft && r.tag_name !== currentTag);
               if (!stable) {
                 core.setOutput('body_b64', '');
                 return;

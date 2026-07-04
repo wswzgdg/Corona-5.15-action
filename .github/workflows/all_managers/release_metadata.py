@@ -21,8 +21,8 @@ COMMON_REPO = ('common', 'kernel_common_oplus', 'https://github.com/Corona-oplus
 AK3_REPOS = {
     'main': ('ak3-main', 'main', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'),
     'kpm': ('ak3-kpm', 'kpm', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'),
-    'kp-n': ('ak3-kp-n', 'kp-n', 'https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kp-n'),
 }
+SUSFS_REMOTE = 'https://gitlab.com/simonpunk/susfs4ksu'
 MANAGER_REPOS = {
     'resukisu': ('manager', 'ReSukiSU', 'https://github.com/ReSukiSU/ReSukiSU.git', 'dev'),
     'sukisu': ('manager', 'SukiSU', 'https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'),
@@ -85,8 +85,6 @@ def get_ak3_branch(manager):
     """Resolve which AnyKernel3 branch a manager should compare against."""
     if manager == 'none':
         return 'main'
-    if get_kpn_label() == 'on':
-        return 'kp-n'
     return AK3_BY_MANAGER[manager]
 
 
@@ -146,6 +144,24 @@ def ls_remote_commit(remote, branch):
         print(f'Warning: no refs returned for {remote}@{branch}', file=sys.stderr)
         return None
     return output.split()[0]
+
+
+def read_remote_file(remote, branch, file_path):
+    """Fetch a single file from a remote branch without a full clone."""
+    tokenized_remote = with_github_token(remote)
+    if is_private_release_repo(remote) and tokenized_remote == remote:
+        return None
+    with tempfile.TemporaryDirectory(prefix='release-meta-') as temp_dir:
+        try:
+            git_check_output(['git', 'init'], cwd=temp_dir)
+            git_check_output(['git', 'fetch', '--depth', '1', '--filter=blob:none', tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
+            return git_check_output(['git', 'show', f'FETCH_HEAD:{file_path}'], cwd=temp_dir).strip()
+        except subprocess.CalledProcessError as exc:
+            message = exc.output.strip() if exc.output else str(exc)
+            if is_private_release_repo(remote) and ('Repository not found' in message or 'could not read Username' in message):
+                return None
+            print(f'Warning: failed to read {file_path} from {remote}@{branch}: {message}', file=sys.stderr)
+            return None
 
 
 def list_recent_commits(remote, branch, limit=15):
@@ -227,7 +243,47 @@ def get_successful_managers(path='successful_managers.json'):
 
 
 def get_susfs_label():
+    value = os.environ.get('BUILD_SUSFS', '').strip().lower()
+    if value == 'both':
+        return 'both'
     return 'on' if env_flag('BUILD_SUSFS', default=True) else 'off'
+
+
+def get_susfs_version_label():
+    susfs_label = get_susfs_label()
+    if susfs_label == 'off':
+        return ''
+
+    common_branch = COMMON_REPO[3]
+    match = re.search(r'(android\d+)-(\d+\.\d+)', common_branch)
+    branch_candidates = []
+    if match:
+        android_name = match.group(1)
+        kernel_version = match.group(2)
+        branch_candidates.extend([
+            f'gki-{android_name}-{kernel_version}-dev',
+            f'gki-{android_name}-{kernel_version}',
+        ])
+
+    android_release = os.environ.get('BUILD_ANDROID_RELEASE', '16').strip() or '16'
+    branch_candidates.extend([
+        f'gki-android{android_release}-5.15-dev',
+        f'gki-android{android_release}-5.15',
+        f'gki-{android_release}-5.15-dev',
+        f'gki-{android_release}-5.15',
+    ])
+
+    seen = set()
+    for branch in branch_candidates:
+        if not branch or branch in seen:
+            continue
+        seen.add(branch)
+        module_prop = read_remote_file(SUSFS_REMOTE, branch, 'ksu_module_susfs/module.prop') or ''
+        version_match = re.search(r'^version=(.+)$', module_prop, re.M)
+        if version_match:
+            return version_match.group(1).strip()
+
+    return branch_candidates[0] if branch_candidates else ''
 
 
 def get_kpn_label():
@@ -251,6 +307,7 @@ def build_current_meta(selected_managers, successful_managers):
     current = {
         '_build': {
             'susfs': get_susfs_label(),
+            'susfs_version': get_susfs_version_label(),
             'kpn': get_kpn_label(),
             'droidspaces': 'on' if os.environ.get('BUILD_DROIDSPACES', 'true').lower() == 'true' else 'off',
             'android': os.environ.get('BUILD_ANDROID_RELEASE', '16'),
@@ -262,7 +319,7 @@ def build_current_meta(selected_managers, successful_managers):
         '_ak3': {'repos': []},
     }
     required_ak3 = []
-    for branch_name in ['main', 'kpm', 'kp-n']:
+    for branch_name in ['main', 'kpm']:
         if any(get_ak3_branch(manager) == branch_name for manager in successful_managers):
             required_ak3.append(branch_name)
     for branch_name in required_ak3:
@@ -426,7 +483,7 @@ def append_manager_section(lines, current_meta, previous_meta):
 
 
 def append_hidden_meta(lines, current_meta):
-    """Persist the current snapshot for the next stable release diff."""
+    """Persist the current snapshot only for stable releases."""
     is_prerelease = env_flag('IS_PRERELEASE', default=False)
     if not is_prerelease:
         lines.append(f"<!-- source-meta-begin\n{json.dumps(current_meta, ensure_ascii=False, separators=(',', ':'))}\nsource-meta-end -->")
@@ -436,6 +493,7 @@ def build_release_lines(previous_meta, current_meta):
     """Render the markdown lines for the release body."""
     build_meta = current_meta.get('_build', {})
     susfs_label = build_meta.get('susfs', get_susfs_label())
+    susfs_version = build_meta.get('susfs_version', get_susfs_version_label())
     kpn_label = build_meta.get('kpn', get_kpn_label())
     droidspaces_label = build_meta.get('droidspaces', 'on')
     android_label = build_meta.get('android', '16')
@@ -445,6 +503,8 @@ def build_release_lines(previous_meta, current_meta):
     lines = ['## 构建选项', '']
     lines.append(f'- Android: {android_label}')
     lines.append(f'- SUSFS: {susfs_label}')
+    if susfs_label != 'off' and susfs_version:
+        lines.append(f'- SUSFS 版本: {susfs_version}')
     lines.append(f'- Droidspaces: {droidspaces_label}')
     lines.append(f'- KP-N: {kpn_label}')
     if clang_label:
@@ -468,6 +528,8 @@ def generate_release_body(output_path='release_body.md'):
     if previous_body_b64:
         previous_body = base64.b64decode(previous_body_b64).decode('utf-8')
     previous_meta = load_previous_meta(previous_body)
+    if env_flag('IS_PRERELEASE', default=False):
+        previous_meta = {}
     selected_managers = get_selected_managers()
     successful_managers = get_successful_managers()
     current_meta = build_current_meta(selected_managers, successful_managers)

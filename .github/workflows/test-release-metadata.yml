@@ -44,7 +44,6 @@ jobs:
                   ('https://github.com/Corona-oplus-kernel/kernel_common_oplus.git', 'android13-5.15-lts'): '0123456789abcdef0123456789abcdef01234567',
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kpm'): '1111111111111111111111111111111111111111',
                   ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'main'): '2222222222222222222222222222222222222222',
-                  ('https://github.com/Corona-oplus-kernel/AnyKernel3.git', 'kp-n'): '9999999999999999999999999999999999999999',
                   ('https://github.com/ReSukiSU/ReSukiSU.git', 'dev'): '3333333333333333333333333333333333333333',
                   ('https://github.com/ShirkNeko/SukiSU-Ultra.git', 'main'): '4444444444444444444444444444444444444444',
                }
@@ -63,6 +62,8 @@ jobs:
                       return 'Initialized empty Git repository\n'
                   if command[:2] == ['git', 'fetch']:
                       return ''
+                  if command[:2] == ['git', 'show']:
+                      return 'id=susfs\nname=SUSFS\nversion=v2.2.0\n'
                   if command[:3] == ['git', 'cat-file', '-t']:
                       return 'commit\n'
                   if command[:2] == ['git', 'log']:
@@ -102,7 +103,12 @@ jobs:
                   'BUILD_KOWSU': 'false',
                   'BUILD_NONE': 'false',
                   'BUILD_SUSFS': 'true',
+                  'BUILD_ANDROID_RELEASE': '16',
               })
+              assert module.get_susfs_label() == 'on'
+              os.environ['BUILD_SUSFS'] = 'both'
+              assert module.get_susfs_label() == 'both'
+              os.environ['BUILD_SUSFS'] = 'true'
               Path('successful_managers.json').write_text(json.dumps(['resukisu'], ensure_ascii=False))
               previous_meta = {
                   '_shared': {
@@ -145,12 +151,34 @@ jobs:
               previous_body = 'header\n<!-- source-meta-begin\n' + json.dumps(previous_meta, ensure_ascii=False, separators=(',', ':')) + '\nsource-meta-end -->\n'
               os.environ['PREVIOUS_RELEASE_BODY_B64'] = base64.b64encode(previous_body.encode()).decode()
 
-              output_path = Path('release_body_test.md')
-              module.generate_release_body(output_path)
-              body = output_path.read_text()
+              prerelease_output = Path('release_body_prerelease_test.md')
+              os.environ['IS_PRERELEASE'] = 'true'
+              module.generate_release_body(prerelease_output)
+              prerelease_body = prerelease_output.read_text()
+
+              assert '## 构建选项' in prerelease_body
+              assert 'abcdef0...0123456' not in prerelease_body
+              assert 'source-meta-begin' not in prerelease_body
+              assert '- SUSFS: on' in prerelease_body
+              assert '- SUSFS 版本: v2.2.0' in prerelease_body
+              assert '### 内核' in prerelease_body
+              assert 'abcdef0...0123456' not in prerelease_body
+              assert '### 刷机包' in prerelease_body
+              assert '- kpm: 无修改' in prerelease_body
+              assert 'main:' not in prerelease_body
+              assert '### 管理器' in prerelease_body
+              assert '- ReSukiSU: [`3333333`]' in prerelease_body
+              assert '- SukiSU:' not in prerelease_body
+              assert 'secret-token' not in prerelease_body
+
+              stable_output = Path('release_body_test.md')
+              os.environ['IS_PRERELEASE'] = 'false'
+              module.generate_release_body(stable_output)
+              body = stable_output.read_text()
 
               assert '## 构建选项' in body
               assert '- SUSFS: on' in body
+              assert '- SUSFS 版本: v2.2.0' in body
               assert '### 内核' in body
               assert 'abcdef0...0123456' in body
               assert '### 刷机包' in body
@@ -165,6 +193,7 @@ jobs:
               assert '"key":"ak3-main"' not in body
           finally:
               Path('successful_managers.json').unlink(missing_ok=True)
+              Path('release_body_prerelease_test.md').unlink(missing_ok=True)
               Path('release_body_test.md').unlink(missing_ok=True)
               module.subprocess.check_output = original_check_output
               os.environ.clear()
