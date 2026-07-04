@@ -202,6 +202,10 @@ def list_commits_range(remote, branch, from_commit):
         try:
             git_check_output(['git', 'init'], cwd=temp_dir)
             git_check_output(['git', 'fetch', '--filter=blob:none', tokenized_remote, f'refs/heads/{branch}'], cwd=temp_dir)
+            try:
+                git_check_output(['git', 'fetch', '--filter=blob:none', tokenized_remote, from_commit], cwd=temp_dir)
+            except subprocess.CalledProcessError:
+                pass
             output = git_check_output(
                 ['git', 'log', '--format=%H%x01%s', f'{from_commit}..FETCH_HEAD'],
                 cwd=temp_dir,
