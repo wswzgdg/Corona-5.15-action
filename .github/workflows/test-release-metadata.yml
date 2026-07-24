@@ -5,12 +5,16 @@ on:
   pull_request:
     paths:
       - ".github/workflows/build-kernel-matrix.yml"
+      - ".github/workflows/kernel-build.yml"
+      - ".github/workflows/all_managers/release_metadata.py"
       - ".github/workflows/test-release-metadata.yml"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/build-kernel-matrix.yml"
+      - ".github/workflows/kernel-build.yml"
+      - ".github/workflows/all_managers/release_metadata.py"
       - ".github/workflows/test-release-metadata.yml"
 
 jobs:
@@ -110,6 +114,22 @@ jobs:
               assert module.get_susfs_label() == 'both'
               os.environ['BUILD_SUSFS'] = 'true'
               Path('successful_managers.json').write_text(json.dumps(['resukisu'], ensure_ascii=False))
+              common_meta = Path('common_meta')
+              common_meta.mkdir(exist_ok=True)
+              recorded_common = {
+                  'key': 'common',
+                  'label': 'kernel_common_oplus',
+                  'remote': 'https://github.com/Corona-oplus-kernel/kernel_common_oplus.git',
+                  'branch': 'android13-5.15-lts',
+                  'commit': '0123456789abcdef0123456789abcdef01234567',
+              }
+              (common_meta / 'resukisu-true.json').write_text(
+                  json.dumps(recorded_common, ensure_ascii=False), encoding='utf-8'
+              )
+              (common_meta / 'ksunext-false.json').write_text(
+                  json.dumps(recorded_common, ensure_ascii=False), encoding='utf-8'
+              )
+              assert module.load_common_build_entry() == recorded_common
               previous_meta = {
                   '_shared': {
                       'repos': [{
@@ -151,6 +171,21 @@ jobs:
               previous_body = 'header\n<!-- source-meta-begin\n' + json.dumps(previous_meta, ensure_ascii=False, separators=(',', ':')) + '\nsource-meta-end -->\n'
               os.environ['PREVIOUS_RELEASE_BODY_B64'] = base64.b64encode(previous_body.encode()).decode()
 
+              previous_meta['_shared']['repos'][0]['commit'] = None
+              legacy_body = (
+                  '### 内核\n'
+                  '- [`abcdef0`](https://github.com/Corona-oplus-kernel/kernel_common_oplus/commit/abcdef0123456789abcdef0123456789abcdef01) old\n\n'
+                  '<!-- source-meta-begin\n'
+                  + json.dumps(previous_meta, ensure_ascii=False, separators=(',', ':'))
+                  + '\nsource-meta-end -->\n'
+              )
+              recovered = module.load_previous_meta(legacy_body)
+              assert recovered['_shared']['repos'][0]['commit'] == 'abcdef0123456789abcdef0123456789abcdef01'
+              previous_meta['_shared']['repos'][0]['commit'] = 'abcdef0123456789abcdef0123456789abcdef01'
+
+              other_common = {**recorded_common, 'remote': 'https://github.com/Corona-oplus-kernel/5.15oplus-c15.git', 'branch': 'Corona'}
+              assert module.render_common_compare_line(recorded_common, other_common) is None
+
               prerelease_output = Path('release_body_prerelease_test.md')
               os.environ['IS_PRERELEASE'] = 'true'
               module.generate_release_body(prerelease_output)
@@ -191,10 +226,24 @@ jobs:
               assert 'source-meta-begin' in body
               assert '"key":"ak3-kpm"' in body
               assert '"key":"ak3-main"' not in body
+              assert '"commit":"0123456789abcdef0123456789abcdef01234567"' in body
+
+              (common_meta / 'ksunext-false.json').write_text(
+                  json.dumps({**recorded_common, 'commit': 'ffffffffffffffffffffffffffffffffffffffff'}),
+                  encoding='utf-8',
+              )
+              try:
+                  module.load_common_build_entry()
+              except RuntimeError as error:
+                  assert 'inconsistent common metadata' in str(error)
+              else:
+                  raise AssertionError('common metadata mismatch was not rejected')
           finally:
               Path('successful_managers.json').unlink(missing_ok=True)
               Path('release_body_prerelease_test.md').unlink(missing_ok=True)
               Path('release_body_test.md').unlink(missing_ok=True)
+              import shutil
+              shutil.rmtree('common_meta', ignore_errors=True)
               module.subprocess.check_output = original_check_output
               os.environ.clear()
               os.environ.update(original_env)

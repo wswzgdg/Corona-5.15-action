@@ -306,6 +306,29 @@ def build_repo_entry(repo_tuple):
     }
 
 
+def load_common_build_entry(directory='common_meta'):
+    """Load and validate the common revision recorded by successful build jobs."""
+    entries = []
+    for path in sorted(Path(directory).glob('*.json')):
+        try:
+            entry = json.loads(path.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f'invalid common metadata {path}: {exc}') from exc
+        required = ('key', 'label', 'remote', 'branch', 'commit')
+        if any(not entry.get(field) for field in required):
+            raise RuntimeError(f'incomplete common metadata {path}')
+        entries.append(entry)
+    if not entries:
+        return None
+    expected = entries[0]
+    for entry in entries[1:]:
+        if entry != expected:
+            raise RuntimeError(
+                f'inconsistent common metadata: {expected["commit"]} != {entry["commit"]}'
+            )
+    return expected
+
+
 def build_current_meta(selected_managers, successful_managers):
     """Build the current source snapshot that will be rendered and persisted."""
     current = {
@@ -319,7 +342,7 @@ def build_current_meta(selected_managers, successful_managers):
             'version_name': os.environ.get('BUILD_VERSION_NAME', ''),
             'kernel_suffix': os.environ.get('BUILD_KERNEL_SUFFIX', ''),
         },
-        '_shared': {'repos': [build_repo_entry(COMMON_REPO)]},
+        '_shared': {'repos': [load_common_build_entry() or build_repo_entry(COMMON_REPO)]},
         '_ak3': {'repos': []},
     }
     required_ak3 = []
@@ -359,7 +382,11 @@ def render_hash_line(label, repo, previous_repo=None):
 def render_common_compare_line(repo, previous_repo=None):
     current_commit = repo.get('commit')
     previous_commit = (previous_repo or {}).get('commit')
-    if not current_commit or not previous_commit or previous_commit == current_commit:
+    same_source = (
+        normalize_github_url(repo.get('remote', '')) == normalize_github_url((previous_repo or {}).get('remote', ''))
+        and repo.get('branch') == (previous_repo or {}).get('branch')
+    )
+    if not same_source or not current_commit or not previous_commit or previous_commit == current_commit:
         return None
     rendered = render_commit_link(repo.get('remote', ''), current_commit, previous_commit, compare_text=True)
     return f'- {repo.get("label", "common")}: {rendered}'
@@ -383,9 +410,16 @@ def load_previous_meta(previous_body):
     if not match:
         return {}
     try:
-        return json.loads(match.group(1))
+        metadata = json.loads(match.group(1))
     except json.JSONDecodeError:
         return {}
+    common = next(iter(metadata.get('_shared', {}).get('repos', [])), None)
+    if common and not common.get('commit'):
+        section = re.search(r'^### 内核\s*$(.*?)(?=^### |\Z)', previous_body, re.M | re.S)
+        commit = re.search(r'/commit/([0-9a-f]{40})', section.group(1) if section else '')
+        if commit:
+            common['commit'] = commit.group(1)
+    return metadata
 
 
 def append_rendered_commits(lines, remote, commits):
@@ -400,6 +434,10 @@ def append_common_section(lines, current_meta, previous_meta):
     """Render the kernel common repository section."""
     common_repo = current_meta['_shared']['repos'][0]
     previous_common = {repo['key']: repo for repo in previous_meta.get('_shared', {}).get('repos', [])}.get('common')
+    same_source = previous_common and (
+        normalize_github_url(common_repo.get('remote', '')) == normalize_github_url(previous_common.get('remote', ''))
+        and common_repo.get('branch') == previous_common.get('branch')
+    )
     lines.append('### 内核')
     common_line = render_common_compare_line(common_repo, previous_common)
     if common_line:
@@ -409,16 +447,12 @@ def append_common_section(lines, current_meta, previous_meta):
             append_rendered_commits(lines, common_repo['remote'], range_commits)
         else:
             append_rendered_commits(lines, common_repo['remote'], list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20))
-    elif previous_common and previous_common.get('commit') and previous_common.get('commit') == common_repo.get('commit'):
+    elif same_source and previous_common.get('commit') == common_repo.get('commit'):
         lines.append('- 无修改')
     else:
-        recent_commits = list_recent_commits(common_repo['remote'], common_repo['branch'], limit=20)
-        if recent_commits:
-            append_rendered_commits(lines, common_repo['remote'], recent_commits)
-        else:
-            rendered = render_hash_line(common_repo['label'], common_repo, previous_common)
-            if rendered:
-                lines.append(rendered)
+        rendered = render_hash_line(common_repo['label'], common_repo)
+        if rendered:
+            lines.append(rendered)
     lines.append('')
 
 

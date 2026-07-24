@@ -447,6 +447,13 @@ jobs:
           pattern: clang-meta-*
           merge-multiple: true
 
+      - name: 下载 common 元数据工件
+        uses: actions/download-artifact@v8
+        with:
+          path: ./common_meta
+          pattern: common-meta-*
+          merge-multiple: true
+
       - name: 打包 AnyKernel3 ZIP
         env:
           AK3_TOKEN: ${{ secrets.AK3_TOKEN }}

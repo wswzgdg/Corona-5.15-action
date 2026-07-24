@@ -246,6 +246,46 @@ jobs:
           path: ${{ github.workspace }}/kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image
           compression-level: 0
 
+      - name: 记录 common 源码元数据
+        if: ${{ steps.compile.outcome == 'success' }}
+        env:
+          MANAGER: ${{ inputs.manager }}
+          SUSFS: ${{ inputs.susfs }}
+          ANDROID_RELEASE: ${{ inputs.android_release }}
+        run: |
+          common_dir="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
+          commit=$(git -C "$common_dir" rev-parse HEAD)
+          if [ "$ANDROID_RELEASE" = "15" ]; then
+            remote="https://github.com/Corona-oplus-kernel/5.15oplus-c15.git"
+            branch="Corona"
+          else
+            remote="https://github.com/Corona-oplus-kernel/kernel_common_oplus.git"
+            branch="android13-5.15-lts"
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/common_meta"
+          python3 - "$GITHUB_WORKSPACE/common_meta/${MANAGER}-${SUSFS}.json" \
+            "$remote" "$branch" "$commit" <<'PY'
+          import json
+          import sys
+
+          path, remote, branch, commit = sys.argv[1:]
+          with open(path, 'w', encoding='utf-8') as output:
+              json.dump({
+                  'key': 'common',
+                  'label': remote.removesuffix('.git').rsplit('/', 1)[-1],
+                  'remote': remote,
+                  'branch': branch,
+                  'commit': commit,
+              }, output, ensure_ascii=False, separators=(',', ':'))
+          PY
+
+      - name: 上传 common 元数据工件
+        if: ${{ steps.compile.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: common-meta-${{ inputs.manager }}-${{ inputs.susfs && 'susfs' || 'nosusfs' }}
+          path: ${{ github.workspace }}/common_meta/*.json
+
       - name: 删除旧 own 缓存
         if: ${{ always() }}
         continue-on-error: true
@@ -320,4 +360,3 @@ jobs:
         with:
           name: clang-meta-${{ inputs.manager }}
           path: ${{ github.workspace }}/clang_meta/version.txt
-
